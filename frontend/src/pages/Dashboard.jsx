@@ -2,17 +2,17 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import axios from 'axios'
 import {
   ActivityIcon,
-  BellIcon,
   CalendarIcon,
   CheckIcon,
   ClipboardIcon,
   CloseIcon,
   DollarIcon,
   FactoryIcon,
-  FlagIcon,
   PackageIcon,
   PinIcon,
+  PlusCircleIcon,
   SparkIcon,
+  TrashIcon,
   UsersIcon
 } from '../components/Icons'
 
@@ -28,6 +28,7 @@ const PRIORITY_LABELS = { high: '高', medium: '中', low: '低' }
 
 const COMPOSER_WIDTH = 306
 const TIP_WIDTH = 268
+const MAX_CELL_EVENTS = 2
 
 // 春节（农历正月初一）公历日期，逐年查表；2025–2035 与天文台公布数据一致。
 const SPRING_FESTIVAL = {
@@ -49,6 +50,14 @@ function describeDate(key) {
   const [year, month, day] = key.split('-').map(Number)
   const weekday = WEEKDAY_SHORT[new Date(year, month - 1, day).getDay()]
   return `${year}年${month}月${day}日 ${weekday}`
+}
+
+/** 把 YYYY-MM-DD 变成「9月10日 周四」 */
+function describeDateShort(key) {
+  const [, month, day] = key.split('-').map(Number)
+  const [year] = key.split('-').map(Number)
+  const weekday = WEEKDAY_SHORT[new Date(year, month - 1, day).getDay()]
+  return `${month}月${day}日 ${weekday}`
 }
 
 /** 某年某月的第 n 个星期 weekday（0=周日） */
@@ -125,6 +134,156 @@ function anchorFor(element, width, estimatedHeight = 240, gap = 8) {
   }
 }
 
+/**
+ * 今日 to do —— 轻量备忘录。
+ * 回车新增；勾选后划线变淡并沉到列表末尾（输入框始终在最底下一行）。
+ */
+function TodoMemo() {
+  const [items, setItems] = useState([])
+  const [draft, setDraft] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const listRef = useRef(null)
+  const revealIdRef = useRef(null)
+
+  const load = useCallback(async () => {
+    try {
+      const response = await axios.get('/api/todos', { params: { list: 'memo' } })
+      setItems(Array.isArray(response.data) ? response.data : [])
+    } catch (loadError) {
+      console.error('获取今日待办失败:', loadError)
+    }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  // 未完成在前（按创建顺序），已完成沉底（后完成的排更靠下，紧贴输入框）
+  const ordered = useMemo(() => {
+    const rank = (item) => (item.status === 'completed' ? 1 : 0)
+    return [...items].sort((a, b) => {
+      if (rank(a) !== rank(b)) return rank(a) - rank(b)
+      if (rank(a) === 1) return String(a.completed_at || '').localeCompare(String(b.completed_at || ''))
+      return Number(a.id) - Number(b.id)
+    })
+  }, [items])
+
+  // 列表可滚动时，勾选后把沉底的条目滚进视野，避免「点完就找不到了」
+  useLayoutEffect(() => {
+    const id = revealIdRef.current
+    if (!id) return
+    revealIdRef.current = null
+    const node = listRef.current?.querySelector(`[data-memo-id="${id}"]`)
+    if (node) node.scrollIntoView({ block: 'nearest' })
+  }, [ordered])
+
+  const doneCount = items.filter((item) => item.status === 'completed').length
+
+  const submit = async (event) => {
+    event.preventDefault()
+    const title = draft.trim()
+    if (!title || saving) return
+    setSaving(true)
+    setError('')
+    try {
+      const response = await axios.post('/api/todos', { title, list: 'memo' })
+      setDraft('')
+      if (response.data?.todo) {
+        setItems((current) => [...current, response.data.todo])
+      } else {
+        await load()
+      }
+    } catch (submitError) {
+      setError(submitError?.response?.data?.error || '添加失败，请稍后重试')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const toggle = async (item) => {
+    const nextStatus = item.status === 'completed' ? 'pending' : 'completed'
+    const optimistic = {
+      ...item,
+      status: nextStatus,
+      completed_at: nextStatus === 'completed' ? new Date().toISOString() : null
+    }
+    revealIdRef.current = item.id
+    setItems((current) => current.map((row) => (row.id === item.id ? optimistic : row)))
+    try {
+      const response = await axios.patch(`/api/todos/${item.id}`, { status: nextStatus })
+      if (response.data?.todo) {
+        setItems((current) => current.map((row) => (row.id === item.id ? response.data.todo : row)))
+      }
+    } catch (toggleError) {
+      console.error('更新待办状态失败:', toggleError)
+      setItems((current) => current.map((row) => (row.id === item.id ? item : row)))
+      setError('状态更新失败，请重试')
+    }
+  }
+
+  const remove = async (item) => {
+    setItems((current) => current.filter((row) => row.id !== item.id))
+    try {
+      await axios.delete(`/api/todos/${item.id}`)
+    } catch (removeError) {
+      console.error('删除待办失败:', removeError)
+      setError('删除失败，请重试')
+      await load()
+    }
+  }
+
+  return (
+    <section className="calendar-side-block is-memo">
+      <div className="calendar-side-head">
+        <div>
+          <h3><CheckIcon size={14} /> 今日 to do</h3>
+          <span className="calendar-side-sub">备忘录 · 回车确认，勾选后沉底</span>
+        </div>
+        {doneCount > 0 && <span className="calendar-side-count">{doneCount}/{items.length}</span>}
+      </div>
+
+      {ordered.length > 0 && (
+        <ul className="memo-list" ref={listRef}>
+          {ordered.map((item) => {
+            const isDone = item.status === 'completed'
+            return (
+              <li className={`memo-item ${isDone ? 'is-done' : ''}`} key={item.id} data-memo-id={item.id}>
+                <button
+                  type="button"
+                  className="memo-check"
+                  role="checkbox"
+                  aria-checked={isDone}
+                  aria-label={isDone ? `取消完成 ${item.title}` : `完成 ${item.title}`}
+                  onClick={() => toggle(item)}
+                >
+                  <CheckIcon size={11} />
+                </button>
+                <span className="memo-text">{item.title}</span>
+                <button type="button" className="memo-remove" onClick={() => remove(item)} aria-label={`删除 ${item.title}`}>
+                  <TrashIcon size={13} />
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
+      <form className="memo-add" onSubmit={submit} data-saving={saving ? 'true' : 'false'}>
+        <span className="memo-add-icon"><PlusCircleIcon size={15} /></span>
+        <input
+          type="text"
+          value={draft}
+          maxLength={200}
+          placeholder="添加一条待办，回车确认"
+          aria-label="添加今日待办"
+          onChange={(event) => setDraft(event.target.value)}
+        />
+      </form>
+      {error && <p className="calendar-composer-error">{error}</p>}
+    </section>
+  )
+}
+
 function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
   const today = new Date()
   const todayKey = toDateKey(today)
@@ -165,7 +324,7 @@ function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
   // 日历按可见网格范围取数（含已完成），与工作台的待办列表各取所需。
   const loadTodos = useCallback(async () => {
     try {
-      const response = await axios.get('/api/todos', { params: { from: gridFrom, to: gridTo } })
+      const response = await axios.get('/api/todos', { params: { from: gridFrom, to: gridTo, list: 'schedule' } })
       setMonthTodos(Array.isArray(response.data) ? response.data.filter(todo => todo.due_date) : [])
     } catch (error) {
       console.error('获取日历日程失败:', error)
@@ -209,6 +368,10 @@ function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
     return result
   }, [holidayYears, monthTodos])
 
+  // 没显式选中时，右侧面板默认看今天
+  const activeKey = selectedKey || todayKey
+  const activeEvents = events[activeKey] || []
+
   const closeComposer = useCallback(() => {
     setComposerKey(null)
     setComposerAnchor(null)
@@ -229,6 +392,15 @@ function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
     return 0
   }, [])
 
+  const openComposer = useCallback((key, element) => {
+    anchorElRef.current = element
+    setComposerAnchor({ ...anchorFor(element, COMPOSER_WIDTH, 330), settled: false })
+    setComposerKey(key)
+    setDraft({ title: '', priority: 'medium', description: '' })
+    setFormError('')
+    setSelectedKey(key)
+  }, [])
+
   const handleDayClick = (event, key) => {
     // 面板打开时点击日期由 document 的 mousedown 接管，这里只负责落到新选中日
     if (pendingSelectRef.current) {
@@ -239,15 +411,7 @@ function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
     }
     if (composerKey === key) { closeComposer(); return }
     if (composerKey) { closeComposer(); setSelectedKey(key); return }
-    if (selectedKey === key) {
-      anchorElRef.current = event.currentTarget
-      setComposerAnchor({ ...anchorFor(event.currentTarget, COMPOSER_WIDTH, 330), settled: false })
-      setComposerKey(key)
-      setDraft({ title: '', priority: 'medium', description: '' })
-      setFormError('')
-      setSelectedKey(key)
-      return
-    }
+    if (selectedKey === key) { openComposer(key, event.currentTarget); return }
     setSelectedKey(key)
   }
 
@@ -334,7 +498,8 @@ function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
         title,
         due_date: composerKey,
         priority: draft.priority,
-        description: draft.description.trim()
+        description: draft.description.trim(),
+        list: 'schedule'
       })
       setSelectedKey(composerKey)
       closeComposer()
@@ -358,50 +523,102 @@ function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
         </div>
         <div className="calendar-toolbar"><button className="calendar-today-btn" onClick={resetMonth}>今天</button><button onClick={() => shiftMonth(-1)} aria-label="上个月">‹</button><strong>{monthLabel}</strong><button onClick={() => shiftMonth(1)} aria-label="下个月">›</button><button className="calendar-view-btn">月</button></div>
       </div>
-      <div className="calendar-week-row">{WEEKDAYS.map(day => <div key={day}>{day}</div>)}</div>
-      <div className="calendar-grid">
-        {calendarDays.map(({ date, currentMonth, key }) => {
-          const dayEvents = events[key] || []
-          const isToday = key === todayKey
-          const isSelected = key === selectedKey
-          const overflow = dayEvents.slice(3)
-          const label = `${describeDate(key)}${dayEvents.length ? `，${dayEvents.length} 项日程` : ''}${isSelected ? '，已选中' : ''}`
-          return (
-            <div
-              className={`calendar-day ${currentMonth ? '' : 'is-outside'} ${isToday ? 'is-today' : ''} ${isSelected ? 'is-selected' : ''} ${key === composerKey ? 'is-composing' : ''}`}
-              key={key}
-              data-date-key={key}
-              role="button"
-              tabIndex={0}
-              aria-label={label}
-              onClick={(event) => handleDayClick(event, key)}
-              onKeyDown={(event) => handleDayKeyDown(event, key)}
-            >
-              <span className="calendar-day-number">{date.getDate()}</span>
-              <div className="calendar-events">
-                {dayEvents.slice(0, 3).map(event => (
-                  <span
-                    className={`calendar-event ${event.tone}`}
-                    key={event.key}
-                    onMouseEnter={(mouseEvent) => showTip(mouseEvent, event)}
-                    onMouseLeave={hideTip}
-                  >
-                    {event.label}
-                  </span>
-                ))}
-                {overflow.length > 0 && (
-                  <span
-                    className="calendar-more"
-                    onMouseEnter={(mouseEvent) => showTip(mouseEvent, { kind: 'more', title: `还有 ${overflow.length} 项`, items: overflow })}
-                    onMouseLeave={hideTip}
-                  >
-                    +{overflow.length}
-                  </span>
-                )}
+
+      <div className="calendar-layout">
+        <div className="calendar-main">
+          <div className="calendar-week-row">{WEEKDAYS.map(day => <div key={day}>{day}</div>)}</div>
+          <div className="calendar-grid">
+            {calendarDays.map(({ date, currentMonth, key }) => {
+              const dayEvents = events[key] || []
+              const isToday = key === todayKey
+              const isSelected = key === selectedKey
+              const overflow = dayEvents.slice(MAX_CELL_EVENTS)
+              const label = `${describeDate(key)}${dayEvents.length ? `，${dayEvents.length} 项日程` : ''}${isSelected ? '，已选中' : ''}`
+              return (
+                <div
+                  className={`calendar-day ${currentMonth ? '' : 'is-outside'} ${isToday ? 'is-today' : ''} ${isSelected ? 'is-selected' : ''} ${key === composerKey ? 'is-composing' : ''}`}
+                  key={key}
+                  data-date-key={key}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={label}
+                  onClick={(event) => handleDayClick(event, key)}
+                  onKeyDown={(event) => handleDayKeyDown(event, key)}
+                >
+                  <span className="calendar-day-number">{date.getDate()}</span>
+                  <div className="calendar-events">
+                    {dayEvents.slice(0, MAX_CELL_EVENTS).map(event => (
+                      <span
+                        className={`calendar-event ${event.tone}`}
+                        key={event.key}
+                        onMouseEnter={(mouseEvent) => showTip(mouseEvent, event)}
+                        onMouseLeave={hideTip}
+                      >
+                        {event.label}
+                      </span>
+                    ))}
+                    {overflow.length > 0 && (
+                      <span
+                        className="calendar-more"
+                        onMouseEnter={(mouseEvent) => showTip(mouseEvent, { kind: 'more', title: `还有 ${overflow.length} 项`, items: overflow })}
+                        onMouseLeave={hideTip}
+                      >
+                        +{overflow.length}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        <aside className="calendar-side">
+          <TodoMemo />
+
+          <section className="calendar-side-block is-day">
+            <div className="calendar-side-head">
+              <div>
+                <h3><PinIcon size={14} /> 待办事项</h3>
+                <span className="calendar-side-sub">{describeDate(activeKey)}</span>
               </div>
+              <button
+                type="button"
+                className="calendar-side-add"
+                onClick={(event) => openComposer(activeKey, event.currentTarget)}
+              >
+                <PlusCircleIcon size={14} /> 新建
+              </button>
             </div>
-          )
-        })}
+
+            {activeEvents.length === 0 ? (
+              <p className="calendar-side-empty">这一天还没有安排。</p>
+            ) : (
+              <ul className="day-list">
+                {activeEvents.map(item => (
+                  <li
+                    className={`day-item ${item.kind === 'holiday' ? 'is-holiday' : ''} ${item.status === 'completed' ? 'is-done' : ''}`}
+                    key={item.key}
+                  >
+                    <span className={`day-dot ${item.tone}`} />
+                    <div className="day-body">
+                      <span className="day-title">{item.title}</span>
+                      {item.kind === 'holiday' ? (
+                        <span className="day-note">{item.note}</span>
+                      ) : (
+                        <span className="day-meta">
+                          {PRIORITY_LABELS[item.priority] || '中'}优先级
+                          {item.customer ? ` · ${item.customer}` : ''}
+                          {item.status === 'completed' ? ' · 已完成' : ''}
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </aside>
       </div>
 
       {composerKey && composerAnchor && (
@@ -420,7 +637,7 @@ function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
             <div className="calendar-composer-head">
               <div>
                 <strong>添加日程</strong>
-                <small>{describeDate(composerKey)}</small>
+                <small>{describeDateShort(composerKey)}</small>
               </div>
               <button type="button" className="calendar-popover-close" onClick={closeComposer} aria-label="关闭"><CloseIcon size={14} /></button>
             </div>
@@ -539,8 +756,6 @@ function Dashboard() {
       <div className="dashboard-content-grid">
         <div className="dashboard-primary-column">
           <section className="dashboard-panel ai-digest-panel"><div className="dashboard-panel-header"><div><span className="section-label">[AI BRIEFING]</span><h2><SparkIcon size={16} /> 今日工作摘要</h2></div><span className="panel-live-status"><i />实时</span></div><div className="ai-digest-body"><strong>系统已准备好协助你处理今天的业务。</strong><p>当前共有 <b>{stats.pendingTodos || 0}</b> 项待办、<b>{stats.activeDeals || 0}</b> 个进行中商机和 <b>{stats.orders || 0}</b> 笔进行中订单。打开右上角 AI 助手，可以直接用自然语言查阅和操作系统。</p><div className="digest-tags"><span>供应链</span><span>客户跟进</span><span>订单节奏</span></div></div></section>
-
-          <section className="dashboard-panel"><div className="dashboard-panel-header"><div><span className="section-label">[TASK QUEUE]</span><h2><PinIcon size={17} /> 待办事项</h2></div><button className="panel-link">查看全部</button></div>{todos.length === 0 ? <div className="dashboard-empty">暂无待办事项，今天可以保持从容。</div> : <ul className="todo-list">{todos.map(todo => <li key={todo.id} className="todo-item"><input type="checkbox" aria-label={`完成 ${todo.title}`} /><div className="todo-content"><div className="todo-title">{todo.title}</div><div className="todo-meta">{todo.customer_name ? `客户：${todo.customer_name}` : '内部任务'}{todo.due_date ? ` · 截止 ${new Date(todo.due_date).toLocaleDateString('zh-CN')}` : ''}</div></div><span className={`priority-badge priority-${todo.priority}`}>{todo.priority === 'high' ? '高' : todo.priority === 'medium' ? '中' : '低'}</span></li>)}</ul>}</section>
 
           <section className="dashboard-panel"><div className="dashboard-panel-header"><div><span className="section-label">[ACTIVITY LOG]</span><h2><ActivityIcon size={17} /> 最近活动</h2></div><button className="panel-link">查看日志</button></div>{recentActivities.length === 0 ? <div className="dashboard-empty">暂无最近活动</div> : <ul className="activity-list">{recentActivities.map(activity => <li key={activity.id} className="activity-item"><span className="activity-time">{new Date(activity.created_at).toLocaleString('zh-CN')}</span><div className="activity-content"><strong>{activity.subject}</strong><span>{activity.content}</span></div></li>)}</ul>}</section>
         </div>

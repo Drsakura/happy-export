@@ -36,6 +36,20 @@ if (!tableExists) {
   initDatabase();
 }
 
+// ---------------------------------------------------------------------------
+// 轻量迁移：schema.sql 只对新库生效，老库缺列在这里补。
+// todos.list —— 'schedule' 日历日程 / 'memo' 今日待办备忘录（备忘录不带日期）
+// ---------------------------------------------------------------------------
+function ensureColumns() {
+  const todoColumns = db.pragma('table_info(todos)').map(column => column.name);
+  if (!todoColumns.includes('list')) {
+    db.exec("ALTER TABLE todos ADD COLUMN list TEXT NOT NULL DEFAULT 'schedule'");
+    console.log('✓ 迁移：todos.list 列已补齐');
+  }
+}
+
+ensureColumns();
+
 // 创建默认管理员账号（如果不存在）
 function createDefaultAdmin() {
   const crypto = require('crypto');

@@ -225,6 +225,7 @@ CREATE TABLE IF NOT EXISTS todos (
   due_date TEXT,
   priority TEXT DEFAULT 'medium',
   status TEXT DEFAULT 'pending',
+  list TEXT NOT NULL DEFAULT 'schedule',
   customer_id INTEGER REFERENCES customers(id),
   deal_id INTEGER REFERENCES deals(id),
   order_id INTEGER REFERENCES orders(id),

@@ -358,23 +358,32 @@ app.get('/api/search', (req, res) => {
 // ---------------------------------------------------------------------------
 const PRIORITIES = ['high', 'medium', 'low'];
 
+// list=schedule（默认）按 due_date 取日历日程；list=memo 取备忘录待办（无日期）
 app.get('/api/todos', (req, res) => {
   try {
-    const from = String(req.query.from || '').slice(0, 10);
-    const to = String(req.query.to || '').slice(0, 10);
-    const conditions = [];
-    const params = [];
-    if (/^\d{4}-\d{2}-\d{2}$/.test(from)) { conditions.push('substr(t.due_date, 1, 10) >= ?'); params.push(from); }
-    if (/^\d{4}-\d{2}-\d{2}$/.test(to)) { conditions.push('substr(t.due_date, 1, 10) <= ?'); params.push(to); }
+    const list = req.query.list === 'memo' ? 'memo' : 'schedule';
+    const conditions = ['t.list = ?'];
+    const params = [list];
+
+    if (list === 'schedule') {
+      const from = String(req.query.from || '').slice(0, 10);
+      const to = String(req.query.to || '').slice(0, 10);
+      conditions.push('t.due_date IS NOT NULL');
+      if (/^\d{4}-\d{2}-\d{2}$/.test(from)) { conditions.push('substr(t.due_date, 1, 10) >= ?'); params.push(from); }
+      if (/^\d{4}-\d{2}-\d{2}$/.test(to)) { conditions.push('substr(t.due_date, 1, 10) <= ?'); params.push(to); }
+    }
+
+    const order = list === 'memo'
+      ? `CASE t.status WHEN 'completed' THEN 1 ELSE 0 END ASC, t.created_at ASC`
+      : `t.due_date ASC, CASE t.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END`;
 
     const todos = db.prepare(`
       SELECT t.id, t.title, t.description, t.due_date, t.priority, t.status, t.customer_id,
              t.created_at, t.completed_at, c.company AS customer_name
       FROM todos t
       LEFT JOIN customers c ON t.customer_id = c.id
-      ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : 'WHERE t.due_date IS NOT NULL'}
-      ORDER BY t.due_date ASC,
-               CASE t.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY ${order}
       LIMIT 500
     `).all(...params);
 
@@ -386,34 +395,98 @@ app.get('/api/todos', (req, res) => {
 
 app.post('/api/todos', (req, res) => {
   try {
+    const list = req.body?.list === 'memo' ? 'memo' : 'schedule';
     const title = String(req.body?.title || '').trim().slice(0, 200);
-    if (!title) return res.status(400).json({ error: '请填写日程标题' });
+    if (!title) return res.status(400).json({ error: list === 'memo' ? '请填写待办内容' : '请填写日程标题' });
 
-    const rawDueDate = String(req.body?.due_date || '').slice(0, 10);
-    const dueDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDueDate) ? rawDueDate : null;
-    if (!dueDate) return res.status(400).json({ error: '日期格式应为 YYYY-MM-DD' });
+    // 备忘录不带日期；日程必须落在某一天
+    let dueDate = null;
+    if (list === 'schedule') {
+      const rawDueDate = String(req.body?.due_date || '').slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDueDate)) return res.status(400).json({ error: '日期格式应为 YYYY-MM-DD' });
+      dueDate = rawDueDate;
+    }
 
     const description = String(req.body?.description || '').trim().slice(0, 1000) || null;
     const priority = PRIORITIES.includes(req.body?.priority) ? req.body.priority : 'medium';
     const now = new Date().toISOString();
 
     const result = db.prepare(`
-      INSERT INTO todos (title, description, due_date, priority, status, created_at)
-      VALUES (?, ?, ?, ?, 'pending', ?)
-    `).run(title, description, dueDate, priority, now);
+      INSERT INTO todos (title, description, due_date, priority, status, list, created_at)
+      VALUES (?, ?, ?, ?, 'pending', ?, ?)
+    `).run(title, description, dueDate, priority, list, now);
 
     // 活动流；activities 表缺失或字段约束变化时不影响主流程
     try {
       db.prepare(`
         INSERT INTO activities (activity_type, subject, content, created_at)
         VALUES ('todo', ?, ?, ?)
-      `).run('新建日程', `${dueDate} ${title}`, now);
+      `).run(list === 'memo' ? '新建待办' : '新建日程', list === 'memo' ? title : `${dueDate} ${title}`, now);
     } catch (activityError) {
       console.warn('写入活动流失败（已忽略）:', activityError.message);
     }
 
     const todo = db.prepare('SELECT * FROM todos WHERE id = ?').get(result.lastInsertRowid);
-    res.json({ id: result.lastInsertRowid, todo, message: '日程已添加' });
+    res.json({ id: result.lastInsertRowid, todo, message: list === 'memo' ? '待办已添加' : '日程已添加' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 勾选完成 / 取消完成 / 改标题等，局部更新
+app.patch('/api/todos/:id', (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const existing = db.prepare('SELECT * FROM todos WHERE id = ?').get(id);
+    if (!existing) return res.status(404).json({ error: '待办不存在' });
+
+    const fields = [];
+    const params = [];
+    const body = req.body || {};
+
+    if (body.status !== undefined) {
+      const status = body.status === 'completed' ? 'completed' : 'pending';
+      fields.push('status = ?', 'completed_at = ?');
+      params.push(status, status === 'completed' ? new Date().toISOString() : null);
+    } else if (body.completed === true || body.completed === false) {
+      fields.push('status = ?', 'completed_at = ?');
+      params.push(body.completed ? 'completed' : 'pending', body.completed ? new Date().toISOString() : null);
+    }
+
+    if (body.title !== undefined) {
+      const title = String(body.title).trim().slice(0, 200);
+      if (!title) return res.status(400).json({ error: '标题不能为空' });
+      fields.push('title = ?');
+      params.push(title);
+    }
+
+    if (body.priority !== undefined) {
+      fields.push('priority = ?');
+      params.push(PRIORITIES.includes(body.priority) ? body.priority : 'medium');
+    }
+
+    if (body.description !== undefined) {
+      fields.push('description = ?');
+      params.push(String(body.description).trim().slice(0, 1000) || null);
+    }
+
+    if (!fields.length) return res.status(400).json({ error: '没有需要更新的字段' });
+
+    params.push(id);
+    db.prepare(`UPDATE todos SET ${fields.join(', ')} WHERE id = ?`).run(...params);
+
+    const todo = db.prepare('SELECT * FROM todos WHERE id = ?').get(id);
+    res.json({ todo, message: todo.status === 'completed' ? '已标记完成' : '已更新' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/todos/:id', (req, res) => {
+  try {
+    const result = db.prepare('DELETE FROM todos WHERE id = ?').run(Number(req.params.id));
+    if (!result.changes) return res.status(404).json({ error: '待办不存在' });
+    res.json({ message: '已删除' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
