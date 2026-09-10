@@ -352,6 +352,73 @@ app.get('/api/search', (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// 日程 / 待办（工作日历用）
+// 日历按可见网格的日期范围取数，包含已完成项，便于区分状态。
+// ---------------------------------------------------------------------------
+const PRIORITIES = ['high', 'medium', 'low'];
+
+app.get('/api/todos', (req, res) => {
+  try {
+    const from = String(req.query.from || '').slice(0, 10);
+    const to = String(req.query.to || '').slice(0, 10);
+    const conditions = [];
+    const params = [];
+    if (/^\d{4}-\d{2}-\d{2}$/.test(from)) { conditions.push('substr(t.due_date, 1, 10) >= ?'); params.push(from); }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(to)) { conditions.push('substr(t.due_date, 1, 10) <= ?'); params.push(to); }
+
+    const todos = db.prepare(`
+      SELECT t.id, t.title, t.description, t.due_date, t.priority, t.status, t.customer_id,
+             t.created_at, t.completed_at, c.company AS customer_name
+      FROM todos t
+      LEFT JOIN customers c ON t.customer_id = c.id
+      ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : 'WHERE t.due_date IS NOT NULL'}
+      ORDER BY t.due_date ASC,
+               CASE t.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END
+      LIMIT 500
+    `).all(...params);
+
+    res.json(todos);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/todos', (req, res) => {
+  try {
+    const title = String(req.body?.title || '').trim().slice(0, 200);
+    if (!title) return res.status(400).json({ error: '请填写日程标题' });
+
+    const rawDueDate = String(req.body?.due_date || '').slice(0, 10);
+    const dueDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDueDate) ? rawDueDate : null;
+    if (!dueDate) return res.status(400).json({ error: '日期格式应为 YYYY-MM-DD' });
+
+    const description = String(req.body?.description || '').trim().slice(0, 1000) || null;
+    const priority = PRIORITIES.includes(req.body?.priority) ? req.body.priority : 'medium';
+    const now = new Date().toISOString();
+
+    const result = db.prepare(`
+      INSERT INTO todos (title, description, due_date, priority, status, created_at)
+      VALUES (?, ?, ?, ?, 'pending', ?)
+    `).run(title, description, dueDate, priority, now);
+
+    // 活动流；activities 表缺失或字段约束变化时不影响主流程
+    try {
+      db.prepare(`
+        INSERT INTO activities (activity_type, subject, content, created_at)
+        VALUES ('todo', ?, ?, ?)
+      `).run('新建日程', `${dueDate} ${title}`, now);
+    } catch (activityError) {
+      console.warn('写入活动流失败（已忽略）:', activityError.message);
+    }
+
+    const todo = db.prepare('SELECT * FROM todos WHERE id = ?').get(result.lastInsertRowid);
+    res.json({ id: result.lastInsertRowid, todo, message: '日程已添加' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // SPA fallback - 所有未匹配的路由返回 index.html
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
