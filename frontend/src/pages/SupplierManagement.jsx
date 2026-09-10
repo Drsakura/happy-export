@@ -26,10 +26,13 @@ function fmtDate(iso, withTime = true) {
 }
 
 function splitCats(text) {
-  return String(text || '')
+  const list = String(text || '')
     .split(/[、,，;；/|\s]+/)
     .map((t) => t.trim())
     .filter(Boolean)
+  /* 源数据里同一类目可能重复登记（如「游标卡尺;游标卡尺」），
+     去重后再渲染，顺带避免 React 因 key 重复而发出警告。 */
+  return [...new Set(list)]
 }
 
 /** 从完整地址里抽出省市，卡片上只显示大致方位 */
