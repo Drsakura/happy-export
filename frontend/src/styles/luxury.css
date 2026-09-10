@@ -226,7 +226,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .global-header-brand { display: flex; align-items: center; gap: 10px; min-width: 238px; }
 .global-header-brand strong, .global-header-brand span { display: block; }
 .global-header-brand strong { font-size: 13px; letter-spacing: .02em; }
-.global-header-brand span:not(.header-status-dot) { color: var(--text-tertiary); font: 9px var(--font-mono); letter-spacing: .12em; margin-top: 3px; }
+.global-header-brand span:not(.header-status-dot):not(.brand-mark) { color: var(--text-tertiary); font: 9px var(--font-mono); letter-spacing: .12em; margin-top: 3px; }
 .header-status-dot { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: var(--success); box-shadow: 0 0 10px var(--success); }
 .global-search { display: flex; align-items: center; gap: 9px; width: min(420px, 35vw); min-height: 38px; padding: 0 11px; color: var(--text-tertiary); background: var(--surface-deep); border: 1px solid var(--border-light); border-radius: 11px; transition: border-color 150ms, box-shadow 150ms; }
 .global-search:focus-within { border-color: var(--primary-border); box-shadow: 0 0 0 3px var(--accent-glow); }
@@ -352,3 +352,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 
 /* Preserve the dense industrial table's column hierarchy on smaller desktops. */
 .table-wrap table { min-width: 980px; }
+
+/* ---- 品牌标识：云 + 数据库（矢量重绘，随主题变色） ---- */
+.global-header-brand .brand-mark { position: relative; display: inline-flex; align-items: center; justify-content: center; color: var(--text-primary); }
+.global-header-brand .brand-mark svg { display: block; }
+.global-header-brand .brand-mark .header-status-dot { position: absolute; right: -1px; bottom: -1px; width: 8px; height: 8px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 3px var(--bg-primary), 0 0 10px var(--success); }

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <!-- happy出口通 品牌标识：云 + 数据库圆柱（矢量绘制，非位图素材） -->
+  <g transform="translate(-0.1 5.8) scale(0.54)" stroke="#7c93a4" stroke-width="3.7">
+    <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
+  </g>
+  <g transform="translate(12 5.1) scale(0.54)" stroke="#2aa7dc" stroke-width="3.7">
+    <ellipse cx="12" cy="5.5" rx="8.5" ry="3.2"/>
+    <path d="M3.5 5.5V19.5A8.5 3.2 0 0 0 20.5 19.5V5.5"/>
+    <path d="M3.5 12.5A8.5 3.2 0 0 0 20.5 12.5"/>
+  </g>
+</svg>

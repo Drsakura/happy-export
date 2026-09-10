@@ -25,6 +25,23 @@ export const FactoryIcon = ({ size = 20, className = '' }) => (
   </svg>
 )
 
+/* 品牌标识：云 + 数据库圆柱（照 icons8-云 重绘为矢量）
+   左半边云跟随主题色，右半边圆柱固定品牌蓝；坐标用 24 网格，内部 0.48 缩放。 */
+export const CloudDbIcon = ({ size = 20, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    {/* 云：闭合圆头轮廓 */}
+    <g transform="translate(1 6) scale(0.48)" stroke="currentColor" strokeWidth="3.54">
+      <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+    </g>
+    {/* 数据库圆柱：顶盖椭圆 + 桶身 + 中间分层线 */}
+    <g transform="translate(12.4 5.4) scale(0.48)" style={{ stroke: 'var(--primary)' }} strokeWidth="3.54">
+      <ellipse cx="12" cy="5.5" rx="8.5" ry="3.2" />
+      <path d="M3.5 5.5V19.5A8.5 3.2 0 0 0 20.5 19.5V5.5" />
+      <path d="M3.5 12.5A8.5 3.2 0 0 0 20.5 12.5" />
+    </g>
+  </svg>
+)
+
 export const DownloadIcon = ({ size = 20, className = '' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
