@@ -161,10 +161,9 @@ async function checkUpdate(repoInput) {
 
   const list = Array.isArray(tags.data) ? tags.data : [];
   const versions = list
-    .map((t) => normalizeTag(t && t.name))
-    .filter(Boolean)
-    .sort(compareVersions)
-    .reverse();
+    .map((t) => ({ raw: String((t && t.name) || ''), version: normalizeTag(t && t.name) }))
+    .filter((t) => t.version)
+    .sort((a, b) => compareVersions(b.version, a.version)); // 降序
 
   if (!versions.length) {
     return {
@@ -177,18 +176,19 @@ async function checkUpdate(repoInput) {
     };
   }
 
-  const latest = versions[0];
+  const [{ version: latest, raw }] = versions;
   return {
     ...base,
     ok: true,
     source: 'tag',
     latest,
-    tag: latest,
+    // 原始 tag 名留着：链接要用它，用清洗过的版本号会指向不存在的路径
+    tag: raw || latest,
     hasUpdate: compareVersions(latest, current) > 0,
     title: '',
     notes: '',
     publishedAt: null,
-    url: `https://github.com/${repo}/releases/tag/${latest}`
+    url: `https://github.com/${repo}/releases/tag/${encodeURIComponent(raw || latest)}`
   };
 }
 
