@@ -252,6 +252,16 @@ export const ImageIcon = ({ size = 18, className = '' }) => (
   </svg>
 )
 
+/* 刷新 / 同步更新 */
+export const RefreshIcon = ({ size = 18, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <path d="M3.2 12a8.8 8.8 0 0 1 15-6.2L21 8.4" />
+    <path d="M21 3.6v4.8h-4.8" />
+    <path d="M20.8 12a8.8 8.8 0 0 1-15 6.2L3 15.6" />
+    <path d="M3 20.4v-4.8h4.8" />
+  </svg>
+)
+
 /* 删除 / 回收 */
 export const TrashIcon = ({ size = 16, className = '' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">

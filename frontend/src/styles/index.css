@@ -281,6 +281,18 @@
 .cart-total { align-self: center; color: var(--text-secondary); font-size: 13px; }
 .cart-total b { color: var(--text-primary); font-size: 16px; }
 
+/* 设置页：系统与更新 */
+.update-status { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 10px 13px; border: 1px solid var(--border-light); border-radius: var(--radius-md); background: var(--surface-deep); color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+.update-status b { color: var(--text-primary); font-family: var(--font-mono); }
+.update-status .spinner { width: 14px; height: 14px; border-width: 2px; }
+.update-status.is-checking { color: var(--text-tertiary); }
+.update-status.is-ok { border-color: var(--success-border); background: var(--success-bg); color: var(--success); }
+.update-status.is-new { border-color: var(--primary-border); background: var(--primary-bg); color: var(--primary-light); }
+.update-status.is-error { border-color: var(--danger-border); background: var(--danger-bg); color: var(--danger); }
+.update-links { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 10px; }
+.update-links .btn-link { text-decoration: none; font-size: 13px; }
+.update-notes { margin: 10px 0 0; max-height: 230px; overflow: auto; padding: 12px 14px; border: 1px solid var(--border-light); border-radius: var(--radius-md); background: var(--surface-deep); color: var(--text-secondary); font-family: var(--font-body); font-size: 12px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+
 /* 窄屏：批量条与抽屉内表单换行 */
 @media (max-width: 720px) {
   .batch-bar { flex-wrap: wrap; }

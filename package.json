@@ -1,0 +1,15 @@
+{
+  "name": "happy-export",
+  "version": "1.0.0",
+  "private": true,
+  "description": "happy 出口通 —— 一体化外贸出口工具系统（SKU 管理 / 知识库 / 客户 CRM / 邮件开发 / AI 回复 / AI 生成）",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Drsakura/happy-export.git"
+  },
+  "scripts": {
+    "dev": "cd frontend && npm run dev",
+    "start": "cd backend && npm start"
+  },
+  "license": "UNLICENSED"
+}

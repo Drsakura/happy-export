@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { MoonIcon, SunIcon, TuneIcon, CheckIcon, CloseIcon, ExchangeIcon, SparkIcon } from './Icons'
+import axios from 'axios'
+import { MoonIcon, SunIcon, TuneIcon, CheckIcon, CloseIcon, ExchangeIcon, SparkIcon, RefreshIcon } from './Icons'
 
 function Settings({ isOpen, onClose, theme, onThemeChange, reducedMotion, onReducedMotionChange }) {
   const [activeCategory, setActiveCategory] = useState('appearance')
@@ -56,6 +57,10 @@ function Settings({ isOpen, onClose, theme, onThemeChange, reducedMotion, onRedu
               <span className="settings-nav-icon"><SparkIcon size={18} /></span>
               <span>智能配置</span>
             </button>
+            <button className={`settings-nav-item ${activeCategory === 'system-update' ? 'active' : ''}`} onClick={() => setActiveCategory('system-update')}>
+              <span className="settings-nav-icon"><RefreshIcon size={18} /></span>
+              <span>系统与更新</span>
+            </button>
           </nav>
           <div className="settings-sidebar-status"><TuneIcon size={15} /><span>专注业务，自在掌控<small>TRADE MANAGEMENT</small></span></div>
         </aside>
@@ -64,6 +69,7 @@ function Settings({ isOpen, onClose, theme, onThemeChange, reducedMotion, onRedu
           {activeCategory === 'appearance' && <AppearanceSettings theme={theme} onThemeChange={onThemeChange} reducedMotion={reducedMotion} onReducedMotionChange={onReducedMotionChange} />}
           {activeCategory === 'import-export' && <ImportExportSettings />}
           {activeCategory === 'ai-config' && <AIConfigSettings />}
+          {activeCategory === 'system-update' && <SystemUpdateSettings />}
         </section>
       </div>
     </div>
@@ -123,6 +129,168 @@ function AIConfigSettings() {
       <div className="settings-group"><h4>AI 功能开关</h4><label className="setting-toggle"><span><strong>启用合同智能解析</strong><small>自动提取合同关键字段</small></span><input type="checkbox" defaultChecked /><i /></label><label className="setting-toggle"><span><strong>启用客户画像分析</strong><small>辅助判断客户跟进优先级</small></span><input type="checkbox" defaultChecked /><i /></label><label className="setting-toggle"><span><strong>启用自动报价建议</strong><small>基于历史价格提供参考</small></span><input type="checkbox" /><i /></label></div>
       <div className="settings-group"><h4>模型选择</h4><div className="form-group"><label>OCR 模型</label><select className="form-select"><option>GPT-4 Vision</option><option>Claude 3 Opus</option><option>Claude 3 Sonnet</option></select></div><div className="form-group"><label>文本分析模型</label><select className="form-select"><option>GPT-4</option><option>Claude 3 Opus</option><option>GPT-3.5 Turbo</option></select></div></div>
       <div className="settings-actions"><button className="btn btn-primary">保存配置</button><button className="btn btn-secondary">测试连接</button></div>
+    </div>
+  )
+}
+
+/* ---------------------------------------------------------------------------
+   系统与更新
+   显示本机版本与运行环境，并从 GitHub 仓库检查是否有新版本。
+   版本号以顶层 package.json 为准；远端取 Release（优先）或 tag。
+--------------------------------------------------------------------------- */
+function SystemUpdateSettings() {
+  const [info, setInfo] = useState(null)
+  const [repo, setRepo] = useState('')
+  const [loadingInfo, setLoadingInfo] = useState(true)
+  const [checking, setChecking] = useState(false)
+  const [result, setResult] = useState(null)
+  const [error, setError] = useState('')
+  const [showNotes, setShowNotes] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    axios
+      .get('/api/system/info')
+      .then(({ data }) => {
+        if (!alive) return
+        setInfo(data)
+        setRepo(data.repo || '')
+      })
+      .catch((e) => {
+        if (alive) setError(e?.response?.data?.error || e.message)
+      })
+      .finally(() => {
+        if (alive) setLoadingInfo(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  const check = async () => {
+    setChecking(true)
+    setError('')
+    setResult(null)
+    setShowNotes(false)
+    try {
+      const { data } = await axios.get('/api/system/check-update', { params: { repo, force: 1 } })
+      setResult(data)
+      if (!data.ok) setError(data.error || '检查更新失败')
+    } catch (e) {
+      setError(e?.response?.data?.error || e.message)
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  const fmtTime = (value) => {
+    if (!value) return ''
+    try {
+      return new Date(value).toLocaleString('zh-CN', { hour12: false })
+    } catch {
+      return String(value)
+    }
+  }
+
+  return (
+    <div className="settings-section">
+      <span className="section-label">[SYSTEM]</span>
+      <h3>系统与更新</h3>
+      <p className="settings-description">查看当前版本与运行环境，并从官方仓库检查是否有新版本。</p>
+
+      <div className="settings-group">
+        <h4>当前版本</h4>
+        <div className="setting-info">
+          <span>
+            <strong>{info ? `happy 出口通 v${info.version}` : '正在读取版本…'}</strong>
+            <small>{info ? `运行环境 Node ${info.node} · ${info.platform} ${info.arch}` : '读取本机信息中'}</small>
+          </span>
+          <span className="preference-badge">正式版</span>
+        </div>
+        {info?.startedAt && <p className="help-text">服务启动于 {fmtTime(info.startedAt)}</p>}
+      </div>
+
+      <div className="settings-group">
+        <h4>更新源</h4>
+        <div className="form-group">
+          <label>GitHub 仓库</label>
+          <input
+            type="text"
+            className="form-input"
+            value={repo}
+            placeholder="owner/repo"
+            onChange={(e) => setRepo(e.target.value)}
+            disabled={checking}
+          />
+        </div>
+        <p className="help-text">默认抓取官方仓库，也支持填完整地址（https://github.com/owner/repo）。</p>
+      </div>
+
+      <div className="settings-group">
+        <h4>检查更新</h4>
+        <div className="settings-actions">
+          <button className="btn btn-primary" onClick={check} disabled={checking || loadingInfo}>
+            {checking ? '检查中…' : '检查更新'}
+          </button>
+        </div>
+        {!checking && result && (
+          <p className="help-text">
+            上次检查：{fmtTime(result.checkedAt)}
+            {result.cached ? '（结果来自缓存）' : ''}
+          </p>
+        )}
+
+        {checking && (
+          <div className="update-status is-checking">
+            <span className="spinner" />
+            <span>正在连接 GitHub，请稍候…</span>
+          </div>
+        )}
+
+        {!checking && error && (
+          <div className="update-status is-error">
+            <CloseIcon size={15} />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {!checking && !error && result?.ok && result.hasUpdate && (
+          <>
+            <div className="update-status is-new">
+              <SparkIcon size={15} />
+              <span>
+                发现新版本 <b>v{result.latest}</b>，当前 v{result.current}
+              </span>
+            </div>
+            {result.publishedAt && <p className="help-text">发布于 {fmtTime(result.publishedAt)}</p>}
+            {(result.url || result.notes) && (
+              <div className="update-links">
+                {result.url && (
+                  <a className="btn-link" href={result.url} target="_blank" rel="noreferrer">
+                    在 GitHub 上查看
+                  </a>
+                )}
+                {result.notes && (
+                  <button className="btn-link" onClick={() => setShowNotes((v) => !v)}>
+                    {showNotes ? '收起更新说明' : '查看更新说明'}
+                  </button>
+                )}
+              </div>
+            )}
+            {showNotes && result.notes && <pre className="update-notes">{result.notes}</pre>}
+          </>
+        )}
+
+        {!checking && !error && result?.ok && !result.hasUpdate && (
+          <>
+            <div className="update-status is-ok">
+              <CheckIcon size={15} />
+              <span>已是最新版本（v{result.current}）</span>
+            </div>
+            {result.note && <p className="help-text">{result.note}</p>}
+          </>
+        )}
+      </div>
     </div>
   )
 }
