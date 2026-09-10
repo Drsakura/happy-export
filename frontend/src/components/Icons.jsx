@@ -209,6 +209,25 @@ export const ChevronDownIcon = ({ size = 16, className = '' }) => (
   </svg>
 )
 
+/* 汇率计算器：机身 + 显示屏 + 按键点阵 */
+export const CalculatorIcon = ({ size = 20, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <rect x="4" y="2.5" width="16" height="19" rx="2.6" />
+    <path d="M8 7.2h8" />
+    <path d="M8.2 11.6h.01M12 11.6h.01M15.8 11.6h.01M8.2 15h.01M12 15h.01M15.8 15h.01M8.2 18.4h.01M12 18.4h.01M15.8 18.4h.01" strokeWidth="2.4" />
+  </svg>
+)
+
+/* 货币互换：上下两条反向箭头 */
+export const SwapIcon = ({ size = 20, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <path d="M4 8.5h15" />
+    <path d="m15.6 5.2 3.3 3.3-3.3 3.3" />
+    <path d="M20 15.5H5" />
+    <path d="m8.4 12.2-3.3 3.3 3.3 3.3" />
+  </svg>
+)
+
 /* 客户报价单 */
 export const QuoteIcon = ({ size = 20, className = '' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">

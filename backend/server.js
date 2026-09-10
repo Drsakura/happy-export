@@ -5,6 +5,7 @@ const http = require('http');
 const db = require('./db/db');
 const updater = require('./lib/updater');
 const systemRoutes = require('./routes/system');
+const fxRoutes = require('./routes/fx');
 
 const app = express();
 const PORT = process.env.PORT || 4300;
@@ -80,6 +81,9 @@ app.get('/api/health', (req, res) => {
 
 // 系统信息与版本更新检查
 app.use('/api/system', systemRoutes);
+
+// 汇率（顶栏汇率计算器用）
+app.use('/api/fx', fxRoutes);
 
 // 获取工作台数据
 app.get('/api/dashboard', (req, res) => {

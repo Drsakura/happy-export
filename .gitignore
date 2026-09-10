@@ -12,9 +12,9 @@ build/
 !.env.example
 
 # ---------- 数据库与运行时数据 ----------
-backend/data/*.db
-backend/data/*.db-*
-backend/data/*.sqlite*
+# backend/data/ 放的是运行时产物（trade.db、汇率缓存 fx-cache.json 等），
+# 全是本机生成的数据，一律不入库；新环境部署时由服务自动创建。
+backend/data/
 backend/uploads/
 
 # ---------- 日志 ----------

@@ -1,7 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { BotIcon, ClockIcon, CloudDbIcon, PlusCircleIcon, SearchIcon } from './Icons'
+import { BotIcon, CloudDbIcon, PlusCircleIcon, SearchIcon } from './Icons'
+import TimeZoneClock from './TimeZoneClock'
+import FxCalculator from './FxCalculator'
 import { HOME_PATH, PAGE_LABELS } from '../navigation'
 
 const TABS_STORAGE_KEY = 'happy.openTabs'
@@ -86,8 +88,6 @@ function GlobalHeader({ onOpenAssistant }) {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  const timeLabel = useMemo(() => now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }), [now])
-  const dateLabel = useMemo(() => now.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' }), [now])
   const selectResult = result => { navigate(result.path); setQuery(''); setSearchOpen(false) }
 
   return (
@@ -116,7 +116,7 @@ function GlobalHeader({ onOpenAssistant }) {
           )
         })}
       </nav>
-      <div className="global-header-actions"><div className="header-clock"><ClockIcon size={16} /><span>{dateLabel}</span><b>{timeLabel}</b></div><button className="quick-create-btn" title="快速新建"><PlusCircleIcon size={19} /><span>快速新建</span></button><button className="ai-entry-btn" onClick={onOpenAssistant} title="打开 AI 助手"><BotIcon size={19} /><span>AI 助手</span><i>β</i></button><button className="header-avatar" title="当前用户">W</button><button className="mobile-search-btn" onClick={() => { setSearchOpen(v => !v); window.setTimeout(() => searchRef.current?.focus(), 0) }} title="搜索"><SearchIcon size={18} /></button></div>
+      <div className="global-header-actions"><TimeZoneClock now={now} /><FxCalculator /><button className="quick-create-btn" title="快速新建"><PlusCircleIcon size={19} /><span>快速新建</span></button><button className="ai-entry-btn" onClick={onOpenAssistant} title="打开 AI 助手"><BotIcon size={19} /><span>AI 助手</span><i>β</i></button><button className="header-avatar" title="当前用户">W</button><button className="mobile-search-btn" onClick={() => { setSearchOpen(v => !v); window.setTimeout(() => searchRef.current?.focus(), 0) }} title="搜索"><SearchIcon size={18} /></button></div>
     </header>
   )
 }

@@ -97,7 +97,7 @@ function Dashboard() {
 
   return (
     <div className="dashboard-container">
-      <div className="dashboard-welcome"><div><span className="section-label">[WORKSPACE / OVERVIEW]</span><h1 className="page-title">工作台</h1><p>把今天的节奏、客户和订单放在同一个视野里。</p></div><div className="dashboard-date-chip"><span>运行日期</span><strong>{new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}</strong></div></div>
+      <div className="dashboard-welcome"><div><span className="section-label">[WORKSPACE / OVERVIEW]</span><h1 className="page-title">工作台</h1><p>把今天的节奏、客户和订单放在同一个视野里。</p></div></div>
 
       <CalendarBoard todos={todos} />
 
