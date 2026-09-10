@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
-import { MoonIcon, SunIcon, TuneIcon, CheckIcon, CloseIcon, ExchangeIcon, SparkIcon, RefreshIcon } from './Icons'
+import { MoonStarsIcon, SunIcon, TuneIcon, CheckIcon, CloseIcon, ExchangeIcon, SparkIcon, RefreshIcon } from './Icons'
 
 function Settings({ isOpen, onClose, theme, onThemeChange, reducedMotion, onReducedMotionChange }) {
   const [activeCategory, setActiveCategory] = useState('appearance')
@@ -85,7 +85,7 @@ function AppearanceSettings({ theme, onThemeChange, reducedMotion, onReducedMoti
 
       <div className="theme-selector" role="group" aria-label="界面主题">
         <button className={`theme-option ${theme === 'dark' ? 'active' : ''}`} aria-pressed={theme === 'dark'} onClick={() => onThemeChange('dark')}>
-          <span className="theme-preview theme-preview-dark" aria-hidden="true"><span className="mini-sidebar"><i /><i /><i /></span><span className="mini-workspace"><MoonIcon size={18} /><span className="mini-stats"><i /><i /><i /></span><span className="mini-table"><i /><i /><i /></span></span></span>
+          <span className="theme-preview theme-preview-dark" aria-hidden="true"><span className="mini-sidebar"><i /><i /><i /></span><span className="mini-workspace"><MoonStarsIcon size={18} /><span className="mini-stats"><i /><i /><i /></span><span className="mini-table"><i /><i /><i /></span></span></span>
           <span><strong>夜间控制台</strong><small>深色 · 低光环境</small></span>
           <span className="theme-check" aria-hidden="true">{theme === 'dark' && <CheckIcon size={14} />}</span>
         </button>

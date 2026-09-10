@@ -14,54 +14,15 @@ import Settings from './components/Settings'
 import GlobalHeader from './components/GlobalHeader'
 import AIAssistant from './components/AIAssistant'
 import { readPreference } from './preferences'
+import { NAV_GROUPS } from './navigation'
 import {
   DashboardIcon,
-  FactoryIcon,
-  PackageIcon,
-  UsersIcon,
-  TargetIcon,
-  ClipboardIcon,
-  DownloadIcon,
-  QuoteIcon,
-  ContractIcon,
-  PurchaseIcon,
   ChevronDownIcon,
   TuneIcon,
   SunIcon,
-  MoonIcon,
+  MoonStarsIcon,
   SidebarLayoutIcon
 } from './components/Icons'
-
-/* 侧边栏分组配置：工作台独立置顶，不归属任何分组 */
-const NAV_GROUPS = [
-  {
-    id: 'business',
-    title: '业务管理',
-    items: [
-      { to: '/quotes', label: '客户报价单管理', icon: QuoteIcon },
-      { to: '/pi-contracts', label: 'PI合同管理', icon: ContractIcon },
-      { to: '/purchase-orders', label: '采购单管理', icon: PurchaseIcon }
-    ]
-  },
-  {
-    id: 'customer',
-    title: '客户管理',
-    items: [
-      { to: '/customers', label: '客户管理', icon: UsersIcon },
-      { to: '/prospects', label: '新客开发', icon: TargetIcon },
-      { to: '/orders', label: '订单管理', icon: ClipboardIcon }
-    ]
-  },
-  {
-    id: 'procurement',
-    title: '采购管理',
-    items: [
-      { to: '/products', label: '产品管理', icon: PackageIcon },
-      { to: '/suppliers', label: '供应商管理', icon: FactoryIcon },
-      { to: '/procurement/import', label: '合同导入', icon: DownloadIcon }
-    ]
-  }
-]
 
 function App() {
   const [collapsed, setCollapsed] = React.useState(false)
@@ -161,7 +122,7 @@ function App() {
                   title={theme === 'light' ? '切换至夜间模式' : '切换至日间模式'}
                   aria-label={theme === 'light' ? '切换至夜间模式' : '切换至日间模式'}
                 >
-                  {theme === 'light' ? <MoonIcon size={18} /> : <SunIcon size={18} />}
+                  {theme === 'light' ? <MoonStarsIcon size={20} /> : <SunIcon size={20} />}
                 </button>
                 <button className="settings-btn" onClick={() => setSettingsOpen(true)} title="设置" aria-label="设置">
                   <TuneIcon size={18} />

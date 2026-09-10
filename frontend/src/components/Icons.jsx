@@ -148,9 +148,17 @@ export const SunIcon = ({ size = 20, className = '' }) => (
   </svg>
 )
 
-export const MoonIcon = ({ size = 20, className = '' }) => (
+/* 明月（含两颗四角星）——夜间模式切换图标
+   造型取自 https://igoutu.cn/icon/101343/moon-and-stars（Icons8 iOS Glyph 风格「明月」），
+   按原图重绘为矢量：月牙 = 大圆挖掉一枚偏向右上的圆（两段圆弧相减），
+   两枚四角星 = 凹边圆角菱形。全部走 currentColor，可跟随日夜主题换色。 */
+export const MoonStarsIcon = ({ size = 20, className = '' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" className={className} aria-hidden="true">
-    <path d="M12 2.5C6.7 2.5 2.5 6.8 2.5 12s4.2 9.5 9.5 9.5c-3.4-2-5.6-5.6-5.6-9.5S8.6 4.5 12 2.5Z" fill="currentColor" />
+    <g fill="currentColor" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round">
+      <path d="M9.63 3.09A10 10 0 1 0 20.61 15.77A9.5 9.5 0 0 1 9.63 3.09Z" />
+      <path d="M14.85 1.1C14.85 1.805 16.495 3.45 17.2 3.45C16.495 3.45 14.85 5.095 14.85 5.8C14.85 5.095 13.205 3.45 12.5 3.45C13.205 3.45 14.85 1.805 14.85 1.1Z" />
+      <path d="M19.95 5.9C19.95 6.86 22.19 9.1 23.15 9.1C22.19 9.1 19.95 11.34 19.95 12.3C19.95 11.34 17.71 9.1 16.75 9.1C17.71 9.1 19.95 6.86 19.95 5.9Z" />
+    </g>
   </svg>
 )
 
