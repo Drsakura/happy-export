@@ -2,14 +2,17 @@
    应用布局与页面组件
    ============================================================ */
 
-.app-container { display: flex; min-height: 100vh; background: var(--bg-primary); }
+.app-container { min-height: 100vh; background: var(--bg-primary); }
+/* 顶栏横跨整宽、压在侧边栏之上；它下方才是「侧边栏 + 主内容」两栏 */
+.app-shell { display: flex; flex-direction: column; min-height: 100vh; }
+.app-body { display: flex; flex: 1 1 auto; min-height: 0; }
 
 /* 侧边栏：仪表板式工业控制台 */
 .sidebar {
   position: sticky;
-  top: 0;
+  top: var(--header-height);
   width: var(--sidebar-width);
-  height: 100vh;
+  height: calc(100vh - var(--header-height));
   flex: 0 0 var(--sidebar-width);
   display: flex;
   flex-direction: column;
@@ -21,14 +24,20 @@
 }
 .sidebar::before { content: ""; height: 3px; flex: 0 0 3px; background: linear-gradient(90deg, var(--primary-dark), var(--primary-light)); }
 .sidebar.collapsed { width: var(--sidebar-collapsed-width); flex-basis: var(--sidebar-collapsed-width); }
-.sidebar-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 76px; padding: 18px 18px 16px; border-bottom: 1px solid var(--border-light); }
-.sidebar-header h1 { margin: 0; overflow: hidden; color: var(--text-primary); font-family: var(--font-display); font-size: 16px; font-weight: 700; letter-spacing: 0.02em; white-space: nowrap; }
+/* 首行：工作台（左）+ 展开/收起导航按钮（右） */
+.sidebar-top { display: flex; align-items: center; gap: 8px; min-height: 62px; padding: 8px 12px; border-bottom: 1px solid var(--border-light); }
+.sidebar-top .nav-item-home { flex: 1 1 auto; min-width: 0; margin: 0; }
+.sidebar-top .collapse-btn { flex: 0 0 auto; }
+.sidebar-top .collapse-btn svg { transition: transform var(--transition-base); }
+.sidebar.collapsed .sidebar-top { flex-direction: column; gap: 8px; padding: 8px; }
+.sidebar.collapsed .sidebar-top .nav-item-home { width: 100%; flex: 0 0 auto; }
+.sidebar.collapsed .collapse-btn svg { transform: rotate(180deg); }
 .collapse-btn { flex: 0 0 30px; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-deep); color: var(--primary-light); cursor: pointer; font-size: 16px; transition: all var(--transition-fast); }
 .collapse-btn:hover { background: var(--primary); color: #041522; border-color: var(--primary); }
-.sidebar-nav { flex: 1; overflow-y: auto; padding: 14px 10px; }
+.sidebar-nav { flex: 1; overflow-y: auto; padding: 6px 10px 14px; }
 /* 分组标题行：标题 + 右侧折叠按钮 */
 .nav-group { display: block; }
-.nav-group:first-of-type .nav-group-header { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-light); }
+.nav-group:first-of-type .nav-group-header { margin-top: 6px; padding-top: 0; }
 .nav-group-header { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 16px 4px 6px; padding: 0 6px; }
 .nav-group-title { flex: 1; margin: 0; color: var(--text-tertiary); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; }
 .nav-group-toggle { display: flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--text-tertiary); cursor: pointer; transition: color var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast); }
@@ -138,7 +147,7 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 1180px) { .stats-grid { grid-template-columns: repeat(3, minmax(160px, 1fr)); } }
-@media (max-width: 900px) { .sidebar { width: var(--sidebar-collapsed-width); flex-basis: var(--sidebar-collapsed-width); } .sidebar-header { justify-content: center; padding: 18px 10px; } .sidebar-header h1 { display: none; } .sidebar-nav { padding-inline: 9px; } .nav-group-header, .nav-item span:not(.icon), .user-info { display: none; } .nav-item { justify-content: center; padding-inline: 10px; } .sidebar-footer { justify-content: center; padding-inline: 10px; } .dashboard-grid { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .sidebar { width: var(--sidebar-collapsed-width); flex-basis: var(--sidebar-collapsed-width); } .sidebar-top { flex-direction: column; gap: 8px; padding: 8px; } .sidebar-top .nav-item-home { width: 100%; flex: 0 0 auto; } .sidebar-top .collapse-btn svg { transform: rotate(180deg); } .sidebar-nav { padding-inline: 9px; } .nav-group-header, .nav-item span:not(.icon), .user-info { display: none; } .nav-item { justify-content: center; padding-inline: 10px; } .sidebar-footer { justify-content: center; padding-inline: 10px; } .dashboard-grid { grid-template-columns: 1fr; } }
 @media (max-width: 620px) { .main-content { padding: 24px 14px 36px; } .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .stat-card { min-height: 88px; padding: 13px; } .stat-icon { flex-basis: 30px; } .stat-value { font-size: 22px; } .dashboard-grid { display: block; } .form-row { grid-template-columns: 1fr; } .settings-modal { height: calc(100vh - 20px); width: calc(100vw - 20px); flex-direction: column; } .settings-sidebar { width: auto; flex-basis: auto; } .settings-header { padding: 14px 18px; } .settings-nav { display: flex; gap: 8px; overflow-x: auto; } .settings-nav-item { width: auto; white-space: nowrap; margin: 0; } .settings-content { padding: 20px 18px; } }
 
 /* 产品页使用的原生 table 同样复用工业表格视觉 */

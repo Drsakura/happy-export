@@ -49,7 +49,7 @@ function GlobalHeader({ onOpenAssistant }) {
 
   return (
     <header className="global-header">
-      <div className="global-header-brand"><span className="brand-mark" title="happy出口通"><CloudDbIcon size={28} /><span className="header-status-dot" /></span><div><strong>happy出口通</strong><span>EXPORT OPERATIONS CONSOLE</span></div></div>
+      <div className="global-header-brand"><span className="brand-mark" title="happy出口通"><CloudDbIcon size={36} /><span className="header-status-dot" /></span><div><strong>happy出口通</strong><span>EXPORT OPERATIONS CONSOLE</span></div></div>
       <div className={`global-search ${searchOpen ? 'is-open' : ''}`}>
         <SearchIcon size={17} />
         <input ref={searchRef} aria-label="搜索 everything" value={query} onFocus={() => setSearchOpen(true)} onChange={event => setQuery(event.target.value)} placeholder="搜索 everything" autoComplete="off" />

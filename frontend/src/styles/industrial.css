@@ -79,6 +79,8 @@
   --text-secondary-legacy: var(--text-secondary);
   --sidebar-width: 264px;
   --sidebar-collapsed-width: 76px;
+  /* 顶栏高度：顶栏横跨整宽压在侧边栏之上，侧边栏据此吸附在其下方 */
+  --header-height: 80px;
 }
 
 [data-theme="light"] {

@@ -86,6 +86,8 @@ function App() {
   }, [reducedMotion])
 
   const navClass = ({ isActive }) => `nav-item${isActive ? ' active' : ''}`
+  /* 工作台额外带一个类，供「展开/收起导航按钮挂在它右侧」定位 */
+  const homeNavClass = ({ isActive }) => `nav-item nav-item-home${isActive ? ' active' : ''}`
 
   const toggleGroup = React.useCallback((id) => {
     setCollapsedGroups(current => current.includes(id) ? current.filter(x => x !== id) : [...current, id])
@@ -94,94 +96,98 @@ function App() {
   return (
     <Router>
       <div className="app-container">
-        <aside inert={settingsOpen || assistantOpen ? "" : undefined} className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
-          <div className="sidebar-header">
-            <h1>{collapsed ? 'HET' : 'happy出口通'}</h1>
-            <button
-              onClick={() => setCollapsed(!collapsed)}
-              className="collapse-btn"
-              aria-label={collapsed ? '展开导航' : '收起导航'}
-              title={collapsed ? '展开导航' : '收起导航'}
-            >
-              <SidebarLayoutIcon size={20} />
-            </button>
-          </div>
-
-          <nav className="sidebar-nav">
-            {/* 工作台：独立置顶，不属于任何分组 */}
-            <NavLink aria-label="工作台" title="工作台" to="/" end className={navClass}>
-              <span className="icon"><DashboardIcon size={18} /></span>
-              {!collapsed && <span>工作台</span>}
-            </NavLink>
-
-            {NAV_GROUPS.map(group => {
-              /* 侧栏整体收起时忽略分组的折叠状态，保证图标仍可点 */
-              const open = collapsed || !collapsedGroups.includes(group.id)
-              return (
-                <div className="nav-group" key={group.id}>
-                  <div className="nav-group-header">
-                    <span className="nav-group-title">{group.title}</span>
-                    {!collapsed && (
-                      <button
-                        type="button"
-                        className={`nav-group-toggle${open ? ' open' : ''}`}
-                        onClick={() => toggleGroup(group.id)}
-                        aria-expanded={open}
-                        aria-label={`${open ? '收起' : '展开'}${group.title}`}
-                        title={`${open ? '收起' : '展开'}${group.title}`}
-                      >
-                        <ChevronDownIcon size={14} />
-                      </button>
-                    )}
-                  </div>
-                  {open && group.items.map(item => {
-                    const ItemIcon = item.icon
-                    return (
-                      <NavLink key={item.to} aria-label={item.label} title={item.label} to={item.to} className={navClass}>
-                        <span className="icon"><ItemIcon size={18} /></span>
-                        {!collapsed && <span>{item.label}</span>}
-                      </NavLink>
-                    )
-                  })}
-                </div>
-              )
-            })}
-          </nav>
-
-          <div className="sidebar-footer">
-            <div className="user-info">管理员</div>
-            <button
-              className="theme-toggle-btn"
-              onClick={() => setTheme(current => current === 'light' ? 'dark' : 'light')}
-              title={theme === 'light' ? '切换至夜间模式' : '切换至日间模式'}
-              aria-label={theme === 'light' ? '切换至夜间模式' : '切换至日间模式'}
-            >
-              {theme === 'light' ? <MoonIcon size={18} /> : <SunIcon size={18} />}
-            </button>
-            <button className="settings-btn" onClick={() => setSettingsOpen(true)} title="设置" aria-label="设置">
-              <TuneIcon size={18} />
-            </button>
-          </div>
-        </aside>
-
-        <main inert={settingsOpen || assistantOpen ? "" : undefined} className="main-content">
+        <div className="app-shell" inert={settingsOpen || assistantOpen ? "" : undefined}>
+          {/* 顶栏横跨整宽，压在侧边栏之上 */}
           <GlobalHeader onOpenAssistant={() => setAssistantOpen(true)} />
-          <div className="route-content">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/quotes" element={<QuoteManagement />} />
-            <Route path="/pi-contracts" element={<PiContractManagement />} />
-            <Route path="/purchase-orders" element={<PurchaseOrderManagement />} />
-            <Route path="/products" element={<ProductManagement />} />
-            <Route path="/suppliers" element={<SupplierManagement />} />
-            <Route path="/procurement/import" element={<EmbeddedSku view="import" />} />
-            <Route path="/customers" element={<CustomerManagement />} />
-            <Route path="/orders" element={<OrderManagement />} />
-            <Route path="/prospects" element={<ProspectManagement />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+
+          <div className="app-body">
+            <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
+              {/* 工作台置顶；展开/收起导航按钮挂在它右侧 */}
+              <div className="sidebar-top">
+                <NavLink aria-label="工作台" title="工作台" to="/" end className={homeNavClass}>
+                  <span className="icon"><DashboardIcon size={18} /></span>
+                  {!collapsed && <span>工作台</span>}
+                </NavLink>
+                <button
+                  onClick={() => setCollapsed(!collapsed)}
+                  className="collapse-btn"
+                  aria-label={collapsed ? '展开导航' : '收起导航'}
+                  title={collapsed ? '展开导航' : '收起导航'}
+                >
+                  <SidebarLayoutIcon size={18} />
+                </button>
+              </div>
+
+              <nav className="sidebar-nav">
+                {NAV_GROUPS.map(group => {
+                  /* 侧栏整体收起时忽略分组的折叠状态，保证图标仍可点 */
+                  const open = collapsed || !collapsedGroups.includes(group.id)
+                  return (
+                    <div className="nav-group" key={group.id}>
+                      <div className="nav-group-header">
+                        <span className="nav-group-title">{group.title}</span>
+                        {!collapsed && (
+                          <button
+                            type="button"
+                            className={`nav-group-toggle${open ? ' open' : ''}`}
+                            onClick={() => toggleGroup(group.id)}
+                            aria-expanded={open}
+                            aria-label={`${open ? '收起' : '展开'}${group.title}`}
+                            title={`${open ? '收起' : '展开'}${group.title}`}
+                          >
+                            <ChevronDownIcon size={14} />
+                          </button>
+                        )}
+                      </div>
+                      {open && group.items.map(item => {
+                        const ItemIcon = item.icon
+                        return (
+                          <NavLink key={item.to} aria-label={item.label} title={item.label} to={item.to} className={navClass}>
+                            <span className="icon"><ItemIcon size={18} /></span>
+                            {!collapsed && <span>{item.label}</span>}
+                          </NavLink>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
+              </nav>
+
+              <div className="sidebar-footer">
+                <div className="user-info">管理员</div>
+                <button
+                  className="theme-toggle-btn"
+                  onClick={() => setTheme(current => current === 'light' ? 'dark' : 'light')}
+                  title={theme === 'light' ? '切换至夜间模式' : '切换至日间模式'}
+                  aria-label={theme === 'light' ? '切换至夜间模式' : '切换至日间模式'}
+                >
+                  {theme === 'light' ? <MoonIcon size={18} /> : <SunIcon size={18} />}
+                </button>
+                <button className="settings-btn" onClick={() => setSettingsOpen(true)} title="设置" aria-label="设置">
+                  <TuneIcon size={18} />
+                </button>
+              </div>
+            </aside>
+
+            <main className="main-content">
+              <div className="route-content">
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/quotes" element={<QuoteManagement />} />
+                <Route path="/pi-contracts" element={<PiContractManagement />} />
+                <Route path="/purchase-orders" element={<PurchaseOrderManagement />} />
+                <Route path="/products" element={<ProductManagement />} />
+                <Route path="/suppliers" element={<SupplierManagement />} />
+                <Route path="/procurement/import" element={<EmbeddedSku view="import" />} />
+                <Route path="/customers" element={<CustomerManagement />} />
+                <Route path="/orders" element={<OrderManagement />} />
+                <Route path="/prospects" element={<ProspectManagement />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+              </div>
+            </main>
           </div>
-        </main>
+        </div>
 
         <AIAssistant isOpen={assistantOpen} onClose={closeAssistant} />
         <Settings isOpen={settingsOpen} onClose={closeSettings} theme={theme} onThemeChange={setTheme} reducedMotion={reducedMotion} onReducedMotionChange={setReducedMotion} />
