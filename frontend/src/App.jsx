@@ -57,7 +57,8 @@ function App() {
   return (
     <Router>
       <div className="app-container">
-        <div className="app-shell" inert={settingsOpen || assistantOpen ? "" : undefined}>
+        {/* 只有设置是模态；「小屁」是浮窗，不能再 inert 主界面，否则没法边聊边操作 */}
+        <div className="app-shell" inert={settingsOpen ? "" : undefined}>
           {/* 顶栏横跨整宽，压在侧边栏之上 */}
           <GlobalHeader onOpenAssistant={() => setAssistantOpen(true)} />
 

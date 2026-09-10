@@ -116,7 +116,7 @@ function GlobalHeader({ onOpenAssistant }) {
           )
         })}
       </nav>
-      <div className="global-header-actions"><TimeZoneClock now={now} /><FxCalculator /><button className="quick-create-btn" title="快速新建"><PlusCircleIcon size={19} /><span>快速新建</span></button><button className="ai-entry-btn" onClick={onOpenAssistant} title="打开 AI 助手"><BotIcon size={19} /><span>AI 助手</span><i>β</i></button><button className="header-avatar" title="当前用户">W</button><button className="mobile-search-btn" onClick={() => { setSearchOpen(v => !v); window.setTimeout(() => searchRef.current?.focus(), 0) }} title="搜索"><SearchIcon size={18} /></button></div>
+      <div className="global-header-actions"><TimeZoneClock now={now} /><FxCalculator /><button className="quick-create-btn" title="快速新建"><PlusCircleIcon size={19} /><span>快速新建</span></button><button className="ai-entry-btn" onClick={onOpenAssistant} title="打开小屁"><BotIcon size={19} /><span>小屁</span><i>β</i></button><button className="header-avatar" title="当前用户">W</button><button className="mobile-search-btn" onClick={() => { setSearchOpen(v => !v); window.setTimeout(() => searchRef.current?.focus(), 0) }} title="搜索"><SearchIcon size={18} /></button></div>
     </header>
   )
 }

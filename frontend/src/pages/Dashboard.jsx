@@ -28,6 +28,8 @@ const PRIORITY_LABELS = { high: '高', medium: '中', low: '低' }
 
 const COMPOSER_WIDTH = 306
 const TIP_WIDTH = 268
+const JUMP_WIDTH = 262
+const JUMP_HEIGHT = 292
 const MAX_CELL_EVENTS = 2
 
 // 春节（农历正月初一）公历日期，逐年查表；2025–2035 与天文台公布数据一致。
@@ -297,9 +299,15 @@ function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
   const [draft, setDraft] = useState({ title: '', priority: 'medium', description: '' })
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
+  // 快速跳转日期：工具条上的小日历按钮 + 浮出的迷你月历
+  const [jumpOpen, setJumpOpen] = useState(false)
+  const [jumpPos, setJumpPos] = useState(null)
+  const [jumpMonth, setJumpMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
 
   const composerRef = useRef(null)
   const tipRef = useRef(null)
+  const jumpRef = useRef(null)
+  const jumpBtnRef = useRef(null)
   const anchorElRef = useRef(null)
   const pendingSelectRef = useRef(null)
 
@@ -371,6 +379,16 @@ function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
   // 没显式选中时，右侧面板默认看今天
   const activeKey = selectedKey || todayKey
   const activeEvents = events[activeKey] || []
+
+  // 迷你月历：按真实天数出行数，避免六月/九月都留一行空
+  const jumpStartDay = (jumpMonth.getDay() + 6) % 7
+  const jumpRows = Math.ceil((jumpStartDay + new Date(jumpMonth.getFullYear(), jumpMonth.getMonth() + 1, 0).getDate()) / 7)
+  const jumpDays = useMemo(() => (
+    Array.from({ length: jumpRows * 7 }, (_, index) => {
+      const date = new Date(jumpMonth.getFullYear(), jumpMonth.getMonth(), index - jumpStartDay + 1)
+      return { date, key: toDateKey(date), currentMonth: date.getMonth() === jumpMonth.getMonth() }
+    })
+  ), [jumpMonth, jumpStartDay, jumpRows])
 
   const closeComposer = useCallback(() => {
     setComposerKey(null)
@@ -487,6 +505,53 @@ function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
   const shiftMonth = (delta) => setMonth(current => new Date(current.getFullYear(), current.getMonth() + delta, 1))
   const resetMonth = () => setMonth(new Date(today.getFullYear(), today.getMonth(), 1))
 
+  /* 跳转浮层挂在工具条按钮右缘（右对齐），下方放不下就翻到上方 */
+  const positionJump = useCallback((element) => {
+    const rect = element.getBoundingClientRect()
+    const left = Math.min(Math.max(12, rect.right - JUMP_WIDTH), Math.max(12, window.innerWidth - JUMP_WIDTH - 12))
+    const flipUp = rect.bottom + 9 + JUMP_HEIGHT > window.innerHeight && rect.top - 9 - JUMP_HEIGHT > 0
+    setJumpPos({ left, top: flipUp ? rect.top - 9 : rect.bottom + 9, placement: flipUp ? 'above' : 'below' })
+  }, [])
+
+  const toggleJump = (event) => {
+    if (jumpOpen) { setJumpOpen(false); return }
+    jumpBtnRef.current = event.currentTarget
+    positionJump(event.currentTarget)
+    setJumpMonth(new Date(month.getFullYear(), month.getMonth(), 1))
+    setJumpOpen(true)
+  }
+
+  const pickJumpDay = (key) => {
+    const [year, monthIndex] = key.split('-').map(Number)
+    setMonth(new Date(year, monthIndex - 1, 1))
+    setSelectedKey(key)
+    setJumpOpen(false)
+  }
+
+  // 点空白处收起跳转浮层（点按钮本身交给 toggleJump 处理）
+  useEffect(() => {
+    if (!jumpOpen) return undefined
+    const onPointerDown = (event) => {
+      if (jumpRef.current?.contains(event.target)) return
+      if (event.target.closest?.('.calendar-jump-btn')) return
+      setJumpOpen(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [jumpOpen])
+
+  // 滚动 / 缩放时跟着按钮走
+  useEffect(() => {
+    if (!jumpOpen) return undefined
+    const reposition = () => { if (jumpBtnRef.current) positionJump(jumpBtnRef.current) }
+    window.addEventListener('scroll', reposition, true)
+    window.addEventListener('resize', reposition)
+    return () => {
+      window.removeEventListener('scroll', reposition, true)
+      window.removeEventListener('resize', reposition)
+    }
+  }, [jumpOpen, positionJump])
+
   const submitDraft = async (event) => {
     event.preventDefault()
     const title = draft.title.trim()
@@ -521,7 +586,7 @@ function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
           <h2><CalendarIcon size={18} /> 工作日历</h2>
           <p className="calendar-hint">单击日期选中，再次单击添加日程 · 悬浮日程或节日查看详情</p>
         </div>
-        <div className="calendar-toolbar"><button className="calendar-today-btn" onClick={resetMonth}>今天</button><button onClick={() => shiftMonth(-1)} aria-label="上个月">‹</button><strong>{monthLabel}</strong><button onClick={() => shiftMonth(1)} aria-label="下个月">›</button><button className="calendar-view-btn">月</button></div>
+        <div className="calendar-toolbar"><button className="calendar-today-btn" onClick={resetMonth}>今天</button><button onClick={() => shiftMonth(-1)} aria-label="上个月">‹</button><strong>{monthLabel}</strong><button onClick={() => shiftMonth(1)} aria-label="下个月">›</button><button type="button" ref={jumpBtnRef} className={`calendar-jump-btn${jumpOpen ? ' is-open' : ''}`} onClick={toggleJump} aria-label="快速跳转日期" aria-expanded={jumpOpen} title="快速跳转日期"><CalendarIcon size={16} /></button></div>
       </div>
 
       <div className="calendar-layout">
@@ -721,6 +786,42 @@ function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
           )}
         </div>
       )}
+
+      {jumpOpen && jumpPos && (
+        <div
+          className="calendar-popover calendar-jump-pop"
+          ref={jumpRef}
+          role="dialog"
+          aria-label="快速跳转日期"
+          style={{
+            left: jumpPos.left,
+            top: jumpPos.top,
+            transform: jumpPos.placement === 'above' ? 'translateY(-100%)' : 'none'
+          }}
+        >
+          <div className="jump-head">
+            <button type="button" onClick={() => setJumpMonth(current => new Date(current.getFullYear(), current.getMonth() - 1, 1))} aria-label="上个月">‹</button>
+            <strong>{jumpMonth.getFullYear()}年{jumpMonth.getMonth() + 1}月</strong>
+            <button type="button" onClick={() => setJumpMonth(current => new Date(current.getFullYear(), current.getMonth() + 1, 1))} aria-label="下个月">›</button>
+          </div>
+          <div className="jump-week">{WEEKDAYS.map(day => <span key={day}>{day.slice(1)}</span>)}</div>
+          <div className="jump-grid">
+            {jumpDays.map(({ date, key, currentMonth }) => (
+              <button
+                type="button"
+                key={key}
+                className={`jump-day${currentMonth ? '' : ' is-outside'}${key === todayKey ? ' is-today' : ''}${key === selectedKey ? ' is-selected' : ''}`}
+                onClick={() => pickJumpDay(key)}
+                aria-label={describeDate(key)}
+                title={describeDate(key)}
+              >
+                {date.getDate()}
+              </button>
+            ))}
+          </div>
+          <button type="button" className="jump-today" onClick={() => pickJumpDay(todayKey)}>回到今天</button>
+        </div>
+      )}
     </section>
   )
 }
@@ -755,7 +856,7 @@ function Dashboard() {
 
       <div className="dashboard-content-grid">
         <div className="dashboard-primary-column">
-          <section className="dashboard-panel ai-digest-panel"><div className="dashboard-panel-header"><div><span className="section-label">[AI BRIEFING]</span><h2><SparkIcon size={16} /> 今日工作摘要</h2></div><span className="panel-live-status"><i />实时</span></div><div className="ai-digest-body"><strong>系统已准备好协助你处理今天的业务。</strong><p>当前共有 <b>{stats.pendingTodos || 0}</b> 项待办、<b>{stats.activeDeals || 0}</b> 个进行中商机和 <b>{stats.orders || 0}</b> 笔进行中订单。打开右上角 AI 助手，可以直接用自然语言查阅和操作系统。</p><div className="digest-tags"><span>供应链</span><span>客户跟进</span><span>订单节奏</span></div></div></section>
+          <section className="dashboard-panel ai-digest-panel"><div className="dashboard-panel-header"><div><span className="section-label">[AI BRIEFING]</span><h2><SparkIcon size={16} /> 今日工作摘要</h2></div><span className="panel-live-status"><i />实时</span></div><div className="ai-digest-body"><strong>系统已准备好协助你处理今天的业务。</strong><p>当前共有 <b>{stats.pendingTodos || 0}</b> 项待办、<b>{stats.activeDeals || 0}</b> 个进行中商机和 <b>{stats.orders || 0}</b> 笔进行中订单。打开右上角的小屁，可以直接用自然语言查阅和操作系统。</p><div className="digest-tags"><span>供应链</span><span>客户跟进</span><span>订单节奏</span></div></div></section>
 
           <section className="dashboard-panel"><div className="dashboard-panel-header"><div><span className="section-label">[ACTIVITY LOG]</span><h2><ActivityIcon size={17} /> 最近活动</h2></div><button className="panel-link">查看日志</button></div>{recentActivities.length === 0 ? <div className="dashboard-empty">暂无最近活动</div> : <ul className="activity-list">{recentActivities.map(activity => <li key={activity.id} className="activity-item"><span className="activity-time">{new Date(activity.created_at).toLocaleString('zh-CN')}</span><div className="activity-content"><strong>{activity.subject}</strong><span>{activity.content}</span></div></li>)}</ul>}</section>
         </div>
