@@ -6,7 +6,7 @@ const POS_KEY = 'happy.aiPos'
 const WIN_WIDTH = 348
 
 const starterMessages = [
-  { role: 'assistant', text: '我是小屁，你的外贸业务助理。可以帮你查客户、产品、供应商、订单、商机和待办，也能代你发起系统内的操作。' },
+  { role: 'assistant', text: '我是小皮，你的外贸业务助理。可以帮你查客户、产品、供应商、订单、商机和待办，也能代你发起系统内的操作。' },
 ]
 
 function readStoredPos() {
@@ -30,7 +30,7 @@ function clampPos(pos, height) {
 }
 
 /**
- * 小屁 —— 右上角浮动小窗。
+ * 小皮 —— 右上角浮动小窗。
  * 不是模态：没有遮罩、不 inert 主界面，所以可以一边让它干活一边自己点系统。
  */
 function AIAssistant({ isOpen, onClose }) {
@@ -136,7 +136,7 @@ function AIAssistant({ isOpen, onClose }) {
       >
         <div className="ai-panel-title">
           <span className="ai-orb"><BotIcon size={16} /></span>
-          <div><span className="section-label">[COPILOT]</span><h2 id="ai-assistant-title">小屁</h2></div>
+          <div><span className="section-label">[COPILOT]</span><h2 id="ai-assistant-title">小皮</h2></div>
         </div>
         <div className="ai-window-actions">
           {!minimized && <span className="ai-live-dot" title="已连接系统业务层" />}
@@ -144,12 +144,12 @@ function AIAssistant({ isOpen, onClose }) {
             type="button"
             className="ai-icon-btn"
             onClick={() => setMinimized(value => !value)}
-            aria-label={minimized ? '展开小屁' : '最小化小屁'}
+            aria-label={minimized ? '展开小皮' : '最小化小皮'}
             title={minimized ? '展开' : '最小化（也可以双击标题栏）'}
           >
             {minimized ? <SparkIcon size={15} /> : <MinusIcon size={16} />}
           </button>
-          <button type="button" className="ai-icon-btn" onClick={onClose} aria-label="关闭小屁" title="关闭">
+          <button type="button" className="ai-icon-btn" onClick={onClose} aria-label="关闭小皮" title="关闭">
             <CloseIcon size={15} />
           </button>
         </div>
@@ -168,8 +168,8 @@ function AIAssistant({ isOpen, onClose }) {
           </div>
 
           <div className="ai-suggestion-row"><button onClick={() => sendMessage('汇总今天最重要的事项')}>汇总今天事项</button><button onClick={() => sendMessage('查看系统数据概览')}>查看系统概览</button></div>
-          <form className="ai-input-row" onSubmit={event => { event.preventDefault(); sendMessage() }}><input ref={inputRef} value={input} onChange={event => setInput(event.target.value)} placeholder="告诉小屁你要查什么或做什么…" aria-label="输入给小屁的内容" /><button type="submit" disabled={!input.trim() || loading} aria-label="发送"><SendIcon size={18} /></button></form>
-          <div className="ai-panel-footer">小屁会先说明将要执行的操作，再进行需要写入数据的动作。</div>
+          <form className="ai-input-row" onSubmit={event => { event.preventDefault(); sendMessage() }}><input type="text" ref={inputRef} value={input} onChange={event => setInput(event.target.value)} placeholder="告诉小皮你要查什么或做什么…" aria-label="输入给小皮的内容" autoComplete="off" /><button type="submit" disabled={!input.trim() || loading} aria-label="发送"><SendIcon size={18} /></button></form>
+          <div className="ai-panel-footer">小皮会先说明将要执行的操作，再进行需要写入数据的动作。</div>
         </React.Fragment>
       )}
     </aside>

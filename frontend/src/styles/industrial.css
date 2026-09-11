@@ -160,22 +160,27 @@ a { color: inherit; }
 .btn-link { border: 0; background: transparent; color: var(--primary-light); font-weight: 600; cursor: pointer; padding: 5px 0; }
 .btn-link:hover { color: var(--text-primary); }
 
-input[type="text"], input[type="search"], input[type="number"], input[type="email"], input[type="tel"], input[type="url"], input[type="password"], select, textarea, .form-input, .form-select {
+/* 输入框一律「无方框」：不做描边，只靠底色区分。
+   ⚠️ 末尾的 input:not([type]) 是为了兜住没写 type 的裸 <input>（AI 输入框曾因此掉进浏览器默认样式）。
+   用的都是 (0,1,1) 同权重，别改成 :not() 链，会压过各处的局部覆盖。 */
+input[type="text"], input[type="search"], input[type="number"], input[type="email"], input[type="tel"], input[type="url"], input[type="password"], input:not([type]), select, textarea, .form-input, .form-select {
   width: 100%;
   min-height: 38px;
   padding: 9px 11px;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--radius-md);
   background: var(--surface-deep);
   color: var(--text-primary);
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 input::placeholder, textarea::placeholder { color: var(--text-tertiary); }
-input:focus, select:focus, textarea:focus, .form-input:focus, .form-select:focus {
+/* 聚焦同样不用方框（原来的 3px 光环 + 描边就是「丑方框」的来源） */
+input:focus, input:not([type]):focus, select:focus, textarea:focus, .form-input:focus, .form-select:focus {
   outline: none;
-  border-color: var(--primary);
-  background: var(--surface);
-  box-shadow: 0 0 0 3px rgba(42, 167, 220, 0.14);
+  border: 0;
+  background: var(--primary-bg);
+  color: var(--text-primary);
+  box-shadow: none;
 }
 
 /* 标签、状态、表格 */
