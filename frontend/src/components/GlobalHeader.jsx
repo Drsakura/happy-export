@@ -95,7 +95,7 @@ function GlobalHeader({ onOpenAssistant }) {
       <div className="global-header-brand"><span className="brand-mark" title="happy出口通"><CloudDbIcon size={36} /><span className="header-status-dot" /></span><div><strong>happy出口通</strong><span>EXPORT OPERATIONS CONSOLE</span></div></div>
       <div className={`global-search ${searchOpen ? 'is-open' : ''}`}>
         <SearchIcon size={17} />
-        <input ref={searchRef} aria-label="搜索 everything" value={query} onFocus={() => setSearchOpen(true)} onChange={event => setQuery(event.target.value)} placeholder="搜索 everything" autoComplete="off" />
+        <input type="text" ref={searchRef} aria-label="搜索 everything" value={query} onFocus={() => setSearchOpen(true)} onChange={event => setQuery(event.target.value)} placeholder="搜索 everything" autoComplete="off" />
         <kbd>⌘ K</kbd>
         {searchOpen && query.trim() && <div className="global-search-results" role="listbox" aria-label="全局搜索结果">
           {searching ? <div className="global-search-status">正在检索系统业务数据…</div> : results.length ? results.map(result => <button key={`${result.type}-${result.id}`} role="option" onMouseDown={event => event.preventDefault()} onClick={() => selectResult(result)}><span className={`search-result-mark ${result.type}`}>{result.typeLabel}</span><span><strong>{result.title}</strong><small>{result.detail}</small></span></button>) : <div className="global-search-status">未找到匹配的数据</div>}
