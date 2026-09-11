@@ -307,7 +307,10 @@ function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
   const [jumpOpen, setJumpOpen] = useState(false)
   const [jumpPos, setJumpPos] = useState(null)
   const [jumpMonth, setJumpMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
-  // 年月拨盘：工具条月份文字与跳转浮层标题共用
+  // 跳转浮层标题：直接输入年月（前 4 位年 + 后 1~2 位月，回车跳转）
+  const [jumpDraft, setJumpDraft] = useState(null)
+  const [jumpInvalid, setJumpInvalid] = useState(false)
+  // 年月拨盘：仅工具条月份文字使用
   const [wheelOpen, setWheelOpen] = useState(false)
   const [wheelPos, setWheelPos] = useState(null)
   const [wheelPeriod, setWheelPeriod] = useState(() => ({ year: today.getFullYear(), month: today.getMonth() + 1 }))
@@ -316,6 +319,7 @@ function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
   const tipRef = useRef(null)
   const jumpRef = useRef(null)
   const jumpBtnRef = useRef(null)
+  const jumpInputRef = useRef(null)
   const wheelRef = useRef(null)
   const wheelAnchorRef = useRef(null)
   const anchorElRef = useRef(null)
@@ -576,6 +580,42 @@ function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
   }
 
   const wheelGoToday = () => applyWheelPeriod(today.getFullYear(), today.getMonth() + 1)
+
+  /* 年月两种写法：「2026年9月」↔「202609」 */
+  const compactPeriod = (date) => `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`
+
+  /* 进入编辑态：换成紧凑数字串并全选，方便直接改；已在编辑中就不打断输入 */
+  const primeJumpInput = () => {
+    if (jumpDraft !== null) return
+    setJumpInvalid(false)
+    setJumpDraft(compactPeriod(jumpMonth))
+    requestAnimationFrame(() => jumpInputRef.current?.select())
+  }
+
+  const changeJumpInput = (event) => {
+    setJumpDraft(event.target.value.replace(/\D/g, '').slice(0, 6))
+    if (jumpInvalid) setJumpInvalid(false)
+  }
+
+  /* 前 4 位是年，剩下 1~2 位是月；只写 4 位则沿用当前月 */
+  const commitJumpInput = () => {
+    const digits = (jumpDraft ?? '').replace(/\D/g, '')
+    if (digits.length < 4) { setJumpInvalid(true); return false }
+    const year = Number(digits.slice(0, 4))
+    const tail = digits.slice(4)
+    const monthNum = tail ? Number(tail) : jumpMonth.getMonth() + 1
+    if (year < 1900 || year > 2999 || monthNum < 1 || monthNum > 12) { setJumpInvalid(true); return false }
+    setJumpMonth(new Date(year, monthNum - 1, 1))
+    setJumpInvalid(false)
+    setJumpDraft(null)
+    jumpInputRef.current?.blur()
+    return true
+  }
+
+  const cancelJumpInput = () => {
+    setJumpDraft(null)
+    setJumpInvalid(false)
+  }
 
   // 点空白处收起跳转浮层（点按钮本身交给 toggleJump 处理）
   useEffect(() => {
@@ -878,7 +918,26 @@ function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
         >
           <div className="jump-head">
             <button type="button" onClick={() => setJumpMonth(current => new Date(current.getFullYear(), current.getMonth() - 1, 1))} aria-label="上个月">‹</button>
-            <button type="button" className="jump-month-btn calendar-month-btn" onClick={() => openWheel(jumpBtnRef.current)} aria-haspopup="dialog" title="滚轮选择年月">{jumpMonth.getFullYear()}年{jumpMonth.getMonth() + 1}月</button>
+            <input
+              ref={jumpInputRef}
+              type="text"
+              className={`jump-month-input${jumpInvalid ? ' is-invalid' : ''}`}
+              value={jumpDraft ?? `${jumpMonth.getFullYear()}年${jumpMonth.getMonth() + 1}月`}
+              onMouseDown={primeJumpInput}
+              onFocus={primeJumpInput}
+              onChange={changeJumpInput}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') { event.preventDefault(); commitJumpInput(); return }
+                if (event.key === 'Escape') { event.stopPropagation(); event.preventDefault(); cancelJumpInput(); event.currentTarget.blur() }
+              }}
+              onBlur={cancelJumpInput}
+              inputMode="numeric"
+              autoComplete="off"
+              spellCheck={false}
+              aria-label="输入年月快速跳转"
+              aria-invalid={jumpInvalid || undefined}
+              title="前 4 位是年、后 1~2 位是月，如 202609，回车跳转"
+            />
             <button type="button" onClick={() => setJumpMonth(current => new Date(current.getFullYear(), current.getMonth() + 1, 1))} aria-label="下个月">›</button>
           </div>
           <div className="jump-week">{WEEKDAYS.map(day => <span key={day}>{day.slice(1)}</span>)}</div>
