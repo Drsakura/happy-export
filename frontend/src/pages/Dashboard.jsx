@@ -15,6 +15,7 @@ import {
   TrashIcon,
   UsersIcon
 } from '../components/Icons'
+import MonthYearWheel from '../components/MonthYearWheel'
 
 const WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 const WEEKDAY_SHORT = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
@@ -30,6 +31,9 @@ const COMPOSER_WIDTH = 306
 const TIP_WIDTH = 268
 const JUMP_WIDTH = 262
 const JUMP_HEIGHT = 292
+const WHEEL_WIDTH = 219
+const WHEEL_HEIGHT = 168
+const WHEEL_YEAR_SPAN = { back: 12, forward: 20 }
 const MAX_CELL_EVENTS = 2
 
 // 春节（农历正月初一）公历日期，逐年查表；2025–2035 与天文台公布数据一致。
@@ -303,11 +307,17 @@ function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
   const [jumpOpen, setJumpOpen] = useState(false)
   const [jumpPos, setJumpPos] = useState(null)
   const [jumpMonth, setJumpMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
+  // 年月拨盘：工具条月份文字与跳转浮层标题共用
+  const [wheelOpen, setWheelOpen] = useState(false)
+  const [wheelPos, setWheelPos] = useState(null)
+  const [wheelPeriod, setWheelPeriod] = useState(() => ({ year: today.getFullYear(), month: today.getMonth() + 1 }))
 
   const composerRef = useRef(null)
   const tipRef = useRef(null)
   const jumpRef = useRef(null)
   const jumpBtnRef = useRef(null)
+  const wheelRef = useRef(null)
+  const wheelAnchorRef = useRef(null)
   const anchorElRef = useRef(null)
   const pendingSelectRef = useRef(null)
 
@@ -460,6 +470,8 @@ function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
       if (event.key !== 'Escape') return
       closeComposer()
       setTip(null)
+      setJumpOpen(false)
+      setWheelOpen(false)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -528,6 +540,43 @@ function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
     setJumpOpen(false)
   }
 
+  /* 年月拨盘：以触发文字为锚点，水平居中于它，下方放不下就翻到上方 */
+  const positionWheel = useCallback((element) => {
+    const rect = element.getBoundingClientRect()
+    const centered = rect.left + rect.width / 2 - WHEEL_WIDTH / 2
+    const left = Math.min(Math.max(12, centered), Math.max(12, window.innerWidth - WHEEL_WIDTH - 12))
+    const flipUp = rect.bottom + 9 + WHEEL_HEIGHT > window.innerHeight && rect.top - 9 - WHEEL_HEIGHT > 0
+    setWheelPos({ left, top: flipUp ? rect.top - 9 : rect.bottom + 9, placement: flipUp ? 'above' : 'below' })
+  }, [])
+
+  const openWheel = (element) => {
+    if (!element) return
+    wheelAnchorRef.current = element
+    setWheelPeriod({ year: month.getFullYear(), month: month.getMonth() + 1 })
+    positionWheel(element)
+    setWheelOpen(true)
+    // 从跳转浮层里点进来时，把浮层收掉，只留拨盘
+    setJumpOpen(false)
+  }
+
+  const closeWheel = () => setWheelOpen(false)
+
+  /* 工具条上的月份文字：再点一次即收起 */
+  const toggleWheelFromBar = (element) => {
+    if (wheelOpen && wheelAnchorRef.current === element) { closeWheel(); return }
+    openWheel(element)
+  }
+
+  /* 拨盘选定年月：主日历与跳转浮层同步过去 */
+  const applyWheelPeriod = (nextYear, nextMonth) => {
+    setWheelPeriod({ year: nextYear, month: nextMonth })
+    const next = new Date(nextYear, nextMonth - 1, 1)
+    setMonth(next)
+    setJumpMonth(next)
+  }
+
+  const wheelGoToday = () => applyWheelPeriod(today.getFullYear(), today.getMonth() + 1)
+
   // 点空白处收起跳转浮层（点按钮本身交给 toggleJump 处理）
   useEffect(() => {
     if (!jumpOpen) return undefined
@@ -551,6 +600,34 @@ function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
       window.removeEventListener('resize', reposition)
     }
   }, [jumpOpen, positionJump])
+
+  // 点空白处收起拨盘（点触发文字本身交给 openWheel 处理）
+  useEffect(() => {
+    if (!wheelOpen) return undefined
+    const onPointerDown = (event) => {
+      if (wheelRef.current?.contains(event.target)) return
+      if (event.target.closest?.('.calendar-month-btn')) return
+      closeWheel()
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [wheelOpen])
+
+  // 页面滚动 / 缩放时跟着锚点走；锚点已从 DOM 摘掉（例如跳转浮层关了）就直接收起
+  useEffect(() => {
+    if (!wheelOpen) return undefined
+    const follow = () => {
+      const anchor = wheelAnchorRef.current
+      if (!anchor || !anchor.isConnected || !anchor.getBoundingClientRect().width) { closeWheel(); return }
+      positionWheel(anchor)
+    }
+    window.addEventListener('scroll', follow, true)
+    window.addEventListener('resize', follow)
+    return () => {
+      window.removeEventListener('scroll', follow, true)
+      window.removeEventListener('resize', follow)
+    }
+  }, [wheelOpen, positionWheel])
 
   const submitDraft = async (event) => {
     event.preventDefault()
@@ -586,7 +663,7 @@ function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
           <h2><CalendarIcon size={18} /> 工作日历</h2>
           <p className="calendar-hint">单击日期选中，再次单击添加日程 · 悬浮日程或节日查看详情</p>
         </div>
-        <div className="calendar-toolbar"><button className="calendar-today-btn" onClick={resetMonth}>今天</button><button onClick={() => shiftMonth(-1)} aria-label="上个月">‹</button><strong>{monthLabel}</strong><button onClick={() => shiftMonth(1)} aria-label="下个月">›</button><button type="button" ref={jumpBtnRef} className={`calendar-jump-btn${jumpOpen ? ' is-open' : ''}`} onClick={toggleJump} aria-label="快速跳转日期" aria-expanded={jumpOpen} title="快速跳转日期"><CalendarIcon size={16} /></button></div>
+        <div className="calendar-toolbar"><button className="calendar-today-btn" onClick={resetMonth}>今天</button><button onClick={() => shiftMonth(-1)} aria-label="上个月">‹</button><button type="button" className={`calendar-month-btn${wheelOpen ? ' is-open' : ''}`} onClick={(event) => toggleWheelFromBar(event.currentTarget)} aria-haspopup="dialog" aria-expanded={wheelOpen} title="滚轮选择年月">{monthLabel}</button><button onClick={() => shiftMonth(1)} aria-label="下个月">›</button><button type="button" ref={jumpBtnRef} className={`calendar-jump-btn${jumpOpen ? ' is-open' : ''}`} onClick={toggleJump} aria-label="快速跳转日期" aria-expanded={jumpOpen} title="快速跳转日期"><CalendarIcon size={16} /></button></div>
       </div>
 
       <div className="calendar-layout">
@@ -801,7 +878,7 @@ function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
         >
           <div className="jump-head">
             <button type="button" onClick={() => setJumpMonth(current => new Date(current.getFullYear(), current.getMonth() - 1, 1))} aria-label="上个月">‹</button>
-            <strong>{jumpMonth.getFullYear()}年{jumpMonth.getMonth() + 1}月</strong>
+            <button type="button" className="jump-month-btn calendar-month-btn" onClick={() => openWheel(jumpBtnRef.current)} aria-haspopup="dialog" title="滚轮选择年月">{jumpMonth.getFullYear()}年{jumpMonth.getMonth() + 1}月</button>
             <button type="button" onClick={() => setJumpMonth(current => new Date(current.getFullYear(), current.getMonth() + 1, 1))} aria-label="下个月">›</button>
           </div>
           <div className="jump-week">{WEEKDAYS.map(day => <span key={day}>{day.slice(1)}</span>)}</div>
@@ -820,6 +897,29 @@ function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
             ))}
           </div>
           <button type="button" className="jump-today" onClick={() => pickJumpDay(todayKey)}>回到今天</button>
+        </div>
+      )}
+
+      {wheelOpen && wheelPos && (
+        <div
+          className="calendar-popover calendar-wheel-pop"
+          ref={wheelRef}
+          role="dialog"
+          aria-label="选择年月"
+          style={{
+            left: wheelPos.left,
+            top: wheelPos.top,
+            transform: wheelPos.placement === 'above' ? 'translateY(-100%)' : 'none'
+          }}
+        >
+          <MonthYearWheel
+            year={wheelPeriod.year}
+            month={wheelPeriod.month}
+            onChange={applyWheelPeriod}
+            onToday={wheelGoToday}
+            minYear={Math.min(today.getFullYear() - WHEEL_YEAR_SPAN.back, month.getFullYear())}
+            maxYear={Math.max(today.getFullYear() + WHEEL_YEAR_SPAN.forward, month.getFullYear())}
+          />
         </div>
       )}
     </section>
