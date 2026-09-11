@@ -140,7 +140,7 @@ function App() {
                 <Route path="/purchase-orders" element={<PurchaseOrderManagement />} />
                 <Route path="/products" element={<ProductManagement />} />
                 <Route path="/suppliers" element={<SupplierManagement />} />
-                <Route path="/procurement/import" element={<EmbeddedSku view="import" />} />
+                <Route path="/procurement/import" element={<EmbeddedSku view="import" theme={theme} />} />
                 <Route path="/customers" element={<CustomerManagement />} />
                 <Route path="/orders" element={<OrderManagement />} />
                 <Route path="/prospects" element={<ProspectManagement />} />
