@@ -1,13 +1,23 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import axios from 'axios'
+import { useNavigate } from 'react-router-dom'
 import {
   CartIcon,
   ImageIcon,
   TrashIcon,
   PencilIcon,
   CloseIcon,
-  PlusCircleIcon
+  PlusCircleIcon,
+  ArrowLeftIcon,
+  UploadIcon,
+  CopyIcon,
+  FingerprintIcon
 } from '../components/Icons'
+import SearchSelect, { SearchField } from '../components/SearchSelect'
+import PackagingPanel from '../components/PackagingPanel'
+import { SkuThumb } from '../components/SkuThumb'
+import { makeMountId, pushLayer, goBackOne, popLayers, useLayerRestore } from '../hooks/useLayerHistory'
+import { useAuth, hasPermission } from '../auth'
 
 /**
  * 产品管理（原生 React 版）
@@ -15,10 +25,17 @@ import {
  * 由 SKU Manager 的「产品查询」视图迁移而来，功能对齐：
  * 检索 / 供应商与待核对筛选 / 反选批量 / 产品详情(货号×参数对比) / 产品与货号编辑
  * / 图片管理 / 小推车。数据统一经 /api/sku/* 同源代理，禁止硬编码 SKU 端口。
+ *
+ * 两级浮层（产品详情抽屉 → 编辑货号）都挂进了浏览器历史，
+ * 所以鼠标侧键 / Alt+← / 系统返回手势都能逐级退回，详见 hooks/useLayerHistory.js。
  */
 
 const API = '/api/sku'
 const ATTR_LIST_ID = 'sku-attr-names'
+
+/* 两级浮层在历史条目里的键名（各自读取，互不干扰） */
+const LAYER_PANEL = 'tmsProductPanel'
+const LAYER_GROUP_MODE = 'tmsGroupMode'
 
 /* ------------------------------ 格式化工具 ------------------------------ */
 
@@ -51,8 +68,9 @@ const thumbSrc = (filename) => `/product-images/${encodeURIComponent(filename)}`
 
 /* ------------------------------ 小部件 ------------------------------ */
 
-/** 关键：图片文件名来自后端，统一走同源代理地址，不拼 3300 */
-function Thumb({ filename, count, size = 38 }) {
+/** 关键：图片文件名来自后端，统一走同源地址 /product-images/*，不拼端口。
+ *  悬浮可弹出大图预览（sku 传进去只为预览卡上能标出货号）。 */
+function Thumb({ filename, count, size = 38, sku }) {
   const style = { width: size, height: size }
   if (!filename) {
     return (
@@ -61,12 +79,15 @@ function Thumb({ filename, count, size = 38 }) {
       </span>
     )
   }
-  return (
-    <span className="thumb-wrap" style={style}>
-      <img className="thumb" style={style} src={thumbSrc(filename)} alt="" loading="lazy" />
-      {count > 1 && <span className="thumb-badge">{count}</span>}
-    </span>
-  )
+  if (count > 1) {
+    return (
+      <span className="thumb-wrap" style={style}>
+        <SkuThumb sku={sku} filename={filename} size={size} />
+        <span className="thumb-badge">{count}</span>
+      </span>
+    )
+  }
+  return <SkuThumb sku={sku} filename={filename} size={size} />
 }
 
 /** 参数编辑器：一组「参数名 / 值」，支持增删 */
@@ -110,32 +131,76 @@ function AttrEditor({ attrs, onChange }) {
   )
 }
 
-/** 供应商下拉：空值 = 未指定 */
+/** 主营类目取前两段当副标题，方便在候选里区分同名/近名供应商 */
+function categoryHint(text, take = 2) {
+  const parts = String(text || '').split(/[、,，;；/|\s]+/).filter(Boolean)
+  return parts.slice(0, take).join(' / ')
+}
+
+/** 供应商候选：把「未指定」与真实档案统一成一组下拉项 */
+function supplierOptionList(suppliers, noneLabel = '未指定供应商') {
+  return [
+    { value: '', label: noneLabel },
+    ...suppliers.map((s) => ({
+      value: String(s.id),
+      label: s.name,
+      hint: categoryHint(s.main_categories)
+    }))
+  ]
+}
+
+/** 供应商下拉：空值 = 未指定；供应商几百家，必须能打字搜 */
 function SupplierSelect({ value, onChange, suppliers, style }) {
+  const options = useMemo(() => supplierOptionList(suppliers), [suppliers])
   return (
-    <select value={value ?? ''} onChange={onChange} style={style}>
-      <option value="">未指定供应商</option>
-      {suppliers.map((s) => (
-        <option key={s.id} value={s.id}>{s.name}</option>
-      ))}
-    </select>
+    <SearchSelect
+      value={value ?? ''}
+      onChange={onChange}
+      options={options}
+      placeholder="未指定供应商"
+      searchPlaceholder="输入供应商名 / 主营类目搜索…"
+      emptyText="没有匹配的供应商"
+      clearable
+      style={style}
+    />
   )
 }
 
 /* ------------------------------ 抽屉外壳 ------------------------------ */
 
-function Drawer({ wide, title, sub, onClose, headerExtra, footer, children }) {
+/**
+ * 通用抽屉。
+ * onBack    给「有下一层」的场景用，会在标题左侧出现一个返回键
+ *           （与鼠标侧键等价，都走浏览器历史，见 useLayerHistory）。
+ * onEscape  Esc 的行为。有下一层时应该"退一层"，没有时才"关抽屉"。
+ */
+function Drawer({ wide, title, sub, onBack, onEscape, onClose, headerExtra, footer, children }) {
+  // 用 ref 存回调，键盘监听只挂一次；否则每次重渲染都要重新绑定
+  const escRef = useRef(onEscape || onClose)
+  escRef.current = onEscape || onClose
+
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    const onKey = (e) => { if (e.key === 'Escape') escRef.current() }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [])
 
   return (
     <>
       <div className="drawer-backdrop" onClick={onClose} />
       <aside className={`drawer${wide ? ' drawer-wide' : ''}`} role="dialog" aria-modal="true">
         <div className="drawer-header">
+          {onBack && (
+            <button
+              type="button"
+              className="drawer-back"
+              onClick={onBack}
+              title="返回上一层（鼠标侧键 / Alt + ← 同样可用）"
+            >
+              <ArrowLeftIcon size={15} />
+              <span>返回</span>
+            </button>
+          )}
           <div className="drawer-head-main">
             <h2 className="drawer-title">{title}</h2>
             {sub && <p className="drawer-sub">{sub}</p>}
@@ -156,13 +221,38 @@ function Drawer({ wide, title, sub, onClose, headerExtra, footer, children }) {
 
 /* ============================ 产品详情抽屉 ============================ */
 
-function GroupDrawer({ groupId, highlightSku, suppliers, onClose, onChanged }) {
+function GroupDrawer({ mountId, groupId, highlightSku, suppliers, onClose, onChanged, onModeChange, canEdit }) {
   const [data, setData] = useState(null)
   const [mode, setMode] = useState({ kind: 'view' })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [lightbox, setLightbox] = useState('')
   const [busy, setBusy] = useState(false)
+
+  /* 勾选要加入小推车的货号，以及"已经在车里"的货号 —— 后者让勾选框能显示成不可重复添加 */
+  const [picked, setPicked] = useState(() => new Set())
+  const [cartSkus, setCartSkus] = useState(() => new Set())
+  const [cartBusy, setCartBusy] = useState(false)
+  const [cartNotice, setCartNotice] = useState('')
+
+  /* 把当前编辑态报给父级：父级据此算出「本页现在压了几层历史」，
+     关抽屉时才能精确退回去（层数不能从历史里读，见 hooks/useLayerHistory.js） */
+  useEffect(() => { onModeChange?.(mode) }, [mode, onModeChange])
+
+  /* 编辑态挂进浏览器历史：顶部返回键、鼠标侧键、Alt + ←、系统返回手势走的是同一条路 */
+  const openMode = useCallback((next) => {
+    pushLayer(mountId, LAYER_GROUP_MODE, next)
+    setMode(next)
+  }, [mountId])
+
+  const backOne = useCallback(() => {
+    // 有本页的层就走历史（状态由 popstate 回写），没有才直接收 —— 兜底，正常不会走到
+    if (!goBackOne(mountId)) setMode({ kind: 'view' })
+  }, [mountId])
+
+  useLayerRestore(mountId, LAYER_GROUP_MODE, (snapshot) => {
+    setMode(snapshot && snapshot.kind ? snapshot : { kind: 'view' })
+  }, '/products')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -195,6 +285,75 @@ function GroupDrawer({ groupId, highlightSku, suppliers, onClose, onChanged }) {
     for (const it of items) for (const a of it.attributes || []) if (!cols.includes(a.name)) cols.push(a.name)
     return cols
   }, [items])
+
+  /* 货号一多（一个产品几十个货号）也要能搜：货号 / 规格 / 参数都能命中 */
+  const [itemQuery, setItemQuery] = useState('')
+  const visibleItems = useMemo(() => {
+    const kw = itemQuery.trim().toLowerCase()
+    if (!kw) return items
+    return items.filter((it) => [
+      it.display_sku,
+      it.sku,
+      it.spec,
+      ...(it.attributes || []).map((a) => `${a.name} ${a.value}`)
+    ].filter(Boolean).join(' ').toLowerCase().includes(kw))
+  }, [items, itemQuery])
+
+  /* --------------------------- 货号勾选 / 加入小推车 --------------------------- */
+
+  const loadCart = useCallback(async () => {
+    try {
+      const { data } = await axios.get(`${API}/cart`)
+      setCartSkus(new Set((Array.isArray(data) ? data : []).map((r) => r.sku)))
+    } catch { /* 小推车读不到不影响看货号，勾选时再加也不迟 */ }
+  }, [])
+
+  useEffect(() => { loadCart() }, [loadCart])
+
+  const togglePick = (sku) => {
+    setPicked((prev) => {
+      const next = new Set(prev)
+      if (next.has(sku)) next.delete(sku)
+      else next.add(sku)
+      return next
+    })
+  }
+
+  /* 全选 / 反选只作用于「当前筛出来的货号」，否则搜完再全选会勾到看不见的货号 */
+  const pickableVisible = useMemo(
+    () => visibleItems.filter((it) => !cartSkus.has(it.sku)),
+    [visibleItems, cartSkus]
+  )
+  const allVisiblePicked = pickableVisible.length > 0 && pickableVisible.every((it) => picked.has(it.sku))
+  const someVisiblePicked = pickableVisible.some((it) => picked.has(it.sku)) && !allVisiblePicked
+
+  const toggleAllVisible = () => {
+    setPicked((prev) => {
+      const next = new Set(prev)
+      if (allVisiblePicked) pickableVisible.forEach((it) => next.delete(it.sku))
+      else pickableVisible.forEach((it) => next.add(it.sku))
+      return next
+    })
+  }
+
+  const addPickedToCart = async () => {
+    if (!picked.size || cartBusy) return
+    const skus = [...picked]
+    setCartBusy(true)
+    setCartNotice('')
+    setError('')
+    try {
+      const { data } = await axios.post(`${API}/cart`, { skus })
+      setCartSkus((prev) => new Set([...prev, ...skus]))
+      setPicked(new Set())
+      setCartNotice(data.added ? `已加入 ${data.added} 个货号到小推车` : '选中的货号都已经在小推车里了')
+      onChanged?.()
+    } catch (e) {
+      setError(e?.response?.data?.error || `加入小推车失败：${e.message}`)
+    } finally {
+      setCartBusy(false)
+    }
+  }
 
   const uploadImages = async (e) => {
     const files = Array.from(e.target.files || [])
@@ -263,9 +422,11 @@ function GroupDrawer({ groupId, highlightSku, suppliers, onClose, onChanged }) {
 
   if (mode.kind === 'view') {
     headerExtra = (
-      <button className="btn btn-sm" onClick={() => setMode({ kind: 'editGroup' })}>
-        <PencilIcon size={14} /> 编辑产品
-      </button>
+      canEdit && (
+        <button className="btn btn-sm" onClick={() => openMode({ kind: 'editGroup' })}>
+          <PencilIcon size={14} /> 编辑产品
+        </button>
+      )
     )
 
     body = (
@@ -292,10 +453,44 @@ function GroupDrawer({ groupId, highlightSku, suppliers, onClose, onChanged }) {
 
         <div className="panel">
           <div className="panel-title">货号与参数</div>
+          {items.length > 1 && (
+            <div className="panel-search-row">
+              <SearchField size="sm" value={itemQuery} onChange={setItemQuery} placeholder="搜货号 / 规格 / 参数…" />
+              {itemQuery !== '' && <span className="secondary">{visibleItems.length} / {items.length} 个货号</span>}
+            </div>
+          )}
+          {cartNotice && <div className="notice-inline notice-ok" style={{ marginBottom: 10 }}>{cartNotice}</div>}
+
+          {picked.size > 0 && (
+            <div className="batch-bar">
+              <span>已选 <b>{picked.size}</b> 个货号</span>
+              <button className="btn btn-sm" onClick={() => setPicked(new Set(pickableVisible.map((it) => it.sku)))}>
+                全选当前 {pickableVisible.length} 个
+              </button>
+              <button className="btn btn-sm" onClick={() => setPicked(new Set())}>取消选择</button>
+              <span style={{ flex: 1 }} />
+              {canEdit && (
+                <button className="btn btn-sm btn-primary" onClick={addPickedToCart} disabled={cartBusy}>
+                  <CartIcon size={14} /> {cartBusy ? '加入中…' : '加入小推车'}
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="table-container" style={{ maxHeight: 380 }}>
             <table className="data-table">
               <thead>
                 <tr>
+                  <th style={{ width: 42 }}>
+                    <input
+                      type="checkbox"
+                      checked={allVisiblePicked}
+                      ref={(el) => { if (el) el.indeterminate = someVisiblePicked }}
+                      onChange={toggleAllVisible}
+                      disabled={pickableVisible.length === 0}
+                      title="全选 / 取消全选当前货号"
+                    />
+                  </th>
                   <th>货号</th>
                   <th>规格</th>
                   <th style={{ textAlign: 'right' }}>采购价</th>
@@ -305,18 +500,51 @@ function GroupDrawer({ groupId, highlightSku, suppliers, onClose, onChanged }) {
                 </tr>
               </thead>
               <tbody>
-                {items.length === 0 ? (
-                  <tr><td colSpan={5 + attrCols.length} className="secondary" style={{ textAlign: 'center' }}>还没有货号</td></tr>
-                ) : items.map((it) => {
+                {visibleItems.length === 0 ? (
+                  <tr><td colSpan={6 + attrCols.length} className="secondary" style={{ textAlign: 'center' }}>
+                    {items.length === 0 ? '还没有货号' : '没有匹配的货号'}
+                  </td></tr>
+                ) : visibleItems.map((it) => {
                   const attrMap = {}
                   for (const a of it.attributes || []) attrMap[a.name] = a.value
+                  const inCart = cartSkus.has(it.sku)
                   return (
                     <tr
                       key={it.sku}
                       className={highlightSku && it.sku === highlightSku ? 'row-hit' : ''}
-                      onClick={() => setMode({ kind: 'editItem', sku: it.sku })}
+                      onClick={() => openMode({ kind: 'editItem', sku: it.sku })}
                     >
-                      <td className="mono bold">{it.display_sku || it.sku}</td>
+                      {/* 勾选框只用来挑「加入小推车」，点它不该顺手进编辑页，所以掐掉冒泡 */}
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={inCart || picked.has(it.sku)}
+                          disabled={inCart}
+                          onChange={() => togglePick(it.sku)}
+                          title={inCart ? '已在小推车里' : '勾选后可加入小推车'}
+                        />
+                      </td>
+                      <td className="mono bold">
+                        <span className="sku-cell">
+                          <SkuThumb sku={it.sku} filename={it.thumb} size={30} />
+                          <span className="sku-cell-text">
+                            {it.display_sku || it.sku}
+                            {it.duplicated_from && (
+                              <span className="pill pill-copy" title={`上传时货号 ${it.duplicated_from} 已存在，系统自动建了这个副本`}>
+                                <CopyIcon size={11} /> 副本
+                              </span>
+                            )}
+                            {inCart && <span className="pill pill-ok">已在车</span>}
+                          </span>
+                        </span>
+                        {/* 谁传的：产品库是组织共享的，来源必须一眼看得见 */}
+                        <span
+                          className={`sku-uploader${it.uploader ? '' : ' is-quiet'}`}
+                          title={it.uploader ? `由 ${it.uploader} 上传` : '这条是留痕功能上线前录入的，没有上传者信息'}
+                        >
+                          <UploadIcon size={11} /> {it.uploader || '来源未记录'}
+                        </span>
+                      </td>
                       <td className="secondary">{it.spec || '—'}</td>
                       <td className="number" style={{ textAlign: 'right' }}>
                         <span className="unit">¥</span>{money(it.price)}
@@ -324,7 +552,7 @@ function GroupDrawer({ groupId, highlightSku, suppliers, onClose, onChanged }) {
                       </td>
                       <td className="number" style={{ textAlign: 'right' }}>{it.moq ?? '—'}</td>
                       {attrCols.map((c) => <td key={c} className="secondary">{attrMap[c] || '—'}</td>)}
-                      <td><button className="btn btn-sm">编辑</button></td>
+                      <td>{canEdit && <button className="btn btn-sm">编辑</button>}</td>
                     </tr>
                   )
                 })}
@@ -332,9 +560,11 @@ function GroupDrawer({ groupId, highlightSku, suppliers, onClose, onChanged }) {
             </table>
           </div>
           <div style={{ marginTop: 11 }}>
-            <button className="btn btn-sm" onClick={() => setMode({ kind: 'newItem' })}>
-              <PlusCircleIcon size={14} /> 新增货号
-            </button>
+            {canEdit && (
+              <button className="btn btn-sm" onClick={() => openMode({ kind: 'newItem' })}>
+                <PlusCircleIcon size={14} /> 新增货号
+              </button>
+            )}
           </div>
         </div>
 
@@ -350,20 +580,24 @@ function GroupDrawer({ groupId, highlightSku, suppliers, onClose, onChanged }) {
                 />
                 {img.is_primary === 1 && <span className="gallery-flag">封面</span>}
                 <div className="gallery-actions">
-                  {img.is_primary !== 1 && (
+                  {img.is_primary !== 1 && canEdit && (
                     <button className="btn btn-sm" onClick={() => setPrimary(img.id)}>设封面</button>
                   )}
-                  <button className="btn btn-sm btn-danger" onClick={() => removeImage(img.id)}>
-                    <TrashIcon size={13} />
-                  </button>
+                  {canEdit && (
+                    <button className="btn btn-sm btn-danger" onClick={() => removeImage(img.id)}>
+                      <TrashIcon size={13} />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
-            <label className="add-image">
-              <PlusCircleIcon size={18} />
-              <span>{busy ? '上传中…' : '添加图片'}</span>
-              <input type="file" accept="image/*" multiple onChange={uploadImages} disabled={busy} />
-            </label>
+            {canEdit && (
+              <label className="add-image">
+                <PlusCircleIcon size={18} />
+                <span>{busy ? '上传中…' : '添加图片'}</span>
+                <input type="file" accept="image/*" multiple onChange={uploadImages} disabled={busy} />
+              </label>
+            )}
           </div>
         </div>
       </>
@@ -376,8 +610,9 @@ function GroupDrawer({ groupId, highlightSku, suppliers, onClose, onChanged }) {
         group={g}
         groupAttributes={groupAttributes}
         suppliers={suppliers}
-        onCancel={() => setMode({ kind: 'view' })}
-        onSaved={async () => { setMode({ kind: 'view' }); await refresh() }}
+        onCancel={backOne}
+        onSaved={async () => { backOne(); await refresh() }}
+        canEdit={canEdit}
       />
     )
   } else if (mode.kind === 'newItem') {
@@ -388,8 +623,18 @@ function GroupDrawer({ groupId, highlightSku, suppliers, onClose, onChanged }) {
         groupId={groupId}
         group={g}
         items={items}
-        onCancel={() => setMode({ kind: 'view' })}
-        onSaved={async () => { setMode({ kind: 'view' }); await refresh() }}
+        onCancel={backOne}
+        canEdit={canEdit}
+        onSaved={async (info) => {
+          backOne()
+          await refresh()
+          /* 撞号时后端不会再报错，而是落成副本 —— 得明说一句，否则用户会以为写错了货号 */
+          if (info?.duplicated_from) {
+            setCartNotice(`货号 ${info.duplicated_from} 已存在，已自动建成副本「${info.display_sku}」，并记下上传者`)
+          } else {
+            setCartNotice('货号已新增，并记下了上传者')
+          }
+        }}
       />
     )
   } else if (mode.kind === 'editItem') {
@@ -400,16 +645,30 @@ function GroupDrawer({ groupId, highlightSku, suppliers, onClose, onChanged }) {
         sku={mode.sku}
         groupId={groupId}
         suppliers={suppliers}
-        onBack={() => setMode({ kind: 'view' })}
-        onSaved={async () => { setMode({ kind: 'view' }); await refresh() }}
+        onBack={backOne}
+        onSaved={async () => { backOne(); await refresh() }}
         onDeleted={async () => { onClose(); onChanged?.() }}
+        canEdit={canEdit}
       />
     )
   }
 
+  /* 在子层（编辑产品 / 新增货号 / 编辑货号）时，标题左侧出现返回键；
+     Esc 也退一层，退到最外层再按一次才关抽屉 —— 免得改了一半直接被关掉 */
+  const inSubLayer = mode.kind !== 'view'
+
   return (
     <>
-      <Drawer wide title={title} sub={sub} onClose={onClose} headerExtra={headerExtra} footer={footer}>
+      <Drawer
+        wide
+        title={title}
+        sub={sub}
+        onBack={inSubLayer ? backOne : undefined}
+        onEscape={inSubLayer ? backOne : onClose}
+        onClose={onClose}
+        headerExtra={headerExtra}
+        footer={footer}
+      >
         {body}
       </Drawer>
       {lightbox && (
@@ -423,7 +682,7 @@ function GroupDrawer({ groupId, highlightSku, suppliers, onClose, onChanged }) {
 
 /* ---------------------------- 产品编辑表单 ---------------------------- */
 
-function GroupForm({ group, groupAttributes, suppliers, onCancel, onSaved }) {
+function GroupForm({ group, groupAttributes, suppliers, onCancel, onSaved, canEdit }) {
   const [form, setForm] = useState({
     name: group.name || '',
     brand: group.brand || '',
@@ -479,7 +738,7 @@ function GroupForm({ group, groupAttributes, suppliers, onCancel, onSaved }) {
       </div>
       <div className="form-group">
         <label>供应商</label>
-        <SupplierSelect value={form.supplier_id} suppliers={suppliers} onChange={(e) => set('supplier_id', e.target.value)} />
+        <SupplierSelect value={form.supplier_id} suppliers={suppliers} onChange={(v) => set('supplier_id', v)} />
       </div>
       <div className="form-group">
         <label>产品说明</label>
@@ -491,9 +750,11 @@ function GroupForm({ group, groupAttributes, suppliers, onCancel, onSaved }) {
       </div>
 
       <div className="form-actions">
-        <button className="btn btn-primary" onClick={save} disabled={saving}>
-          {saving ? '保存中…' : '保存'}
-        </button>
+        {canEdit && (
+          <button className="btn btn-primary" onClick={save} disabled={saving}>
+            {saving ? '保存中…' : '保存'}
+          </button>
+        )}
         <button className="btn" onClick={onCancel} disabled={saving}>取消</button>
       </div>
     </div>
@@ -502,7 +763,7 @@ function GroupForm({ group, groupAttributes, suppliers, onCancel, onSaved }) {
 
 /* ---------------------------- 货号新增表单 ---------------------------- */
 
-function ItemForm({ groupId, group, items, onCancel, onSaved }) {
+function ItemForm({ groupId, group, items, onCancel, onSaved, canEdit }) {
   const [form, setForm] = useState({ sku: '', spec: '', price: '', moq: '', description: '' })
   const [attrs, setAttrs] = useState([])
   const [error, setError] = useState('')
@@ -527,8 +788,7 @@ function ItemForm({ groupId, group, items, onCancel, onSaved }) {
         description: form.description,
         name: group.name,
         attributes: attrs.filter((a) => a.name.trim())
-      })
-      await onSaved()
+      }).then(({ data }) => onSaved(data))
     } catch (e) {
       setError(e?.response?.data?.error || `创建失败：${e.message}`)
     } finally {
@@ -568,12 +828,18 @@ function ItemForm({ groupId, group, items, onCancel, onSaved }) {
       {items.length > 0 && (
         <div className="form-group">
           <label>从现有货号复制参数</label>
-          <select defaultValue="" onChange={(e) => copyFrom(e.target.value)}>
-            <option value="">不复制</option>
-            {items.map((it) => (
-              <option key={it.sku} value={it.sku}>{it.display_sku || it.sku}</option>
-            ))}
-          </select>
+          <SearchSelect
+            value=""
+            onChange={(v) => { if (v) copyFrom(v) }}
+            options={items.map((it) => ({
+              value: it.sku,
+              label: it.display_sku || it.sku,
+              hint: it.spec || ''
+            }))}
+            placeholder="不复制"
+            searchPlaceholder="输入货号 / 规格搜索…"
+            emptyText="没有匹配的货号"
+          />
         </div>
       )}
       <div className="form-group">
@@ -582,9 +848,11 @@ function ItemForm({ groupId, group, items, onCancel, onSaved }) {
       </div>
 
       <div className="form-actions">
-        <button className="btn btn-primary" onClick={save} disabled={saving}>
-          {saving ? '创建中…' : '创建'}
-        </button>
+        {canEdit && (
+          <button className="btn btn-primary" onClick={save} disabled={saving}>
+            {saving ? '创建中…' : '创建'}
+          </button>
+        )}
         <button className="btn" onClick={onCancel} disabled={saving}>取消</button>
       </div>
     </div>
@@ -593,7 +861,7 @@ function ItemForm({ groupId, group, items, onCancel, onSaved }) {
 
 /* ---------------------------- 货号编辑器 ---------------------------- */
 
-function ItemEditor({ sku, groupId, suppliers, onBack, onSaved, onDeleted }) {
+function ItemEditor({ sku, groupId, suppliers, onBack, onSaved, onDeleted, canEdit }) {
   const [product, setProduct] = useState(null)
   const [history, setHistory] = useState([])
   const [groupChoices, setGroupChoices] = useState([])
@@ -700,6 +968,18 @@ function ItemEditor({ sku, groupId, suppliers, onBack, onSaved, onDeleted }) {
         <div className="panel-title">编辑货号 {product.display_sku || product.sku}</div>
         {error && <div className="notice-inline">{error}</div>}
 
+        {/* 溯源条：产品库是组织共享的，谁传的、是不是撞号生成的副本必须一眼看得见 */}
+        <div className="provenance">
+          {product.uploader
+            ? <span className="provenance-item"><UploadIcon size={13} /> 上传者 <b>{product.uploader}</b></span>
+            : <span className="provenance-item is-quiet" title="这条产品是在留痕功能上线前录入的"><UploadIcon size={13} /> 上传者未记录</span>}
+          {product.duplicated_from && (
+            <span className="provenance-item is-copy" title={`上传时货号 ${product.duplicated_from} 已存在，系统自动建了这个副本`}>
+              <CopyIcon size={13} /> 同货号副本 · 复制自 <b>{product.duplicated_from}</b>
+            </span>
+          )}
+        </div>
+
         <div className="form-row">
           <div className="form-group">
             <label>采购价{priceEditable ? '' : '（合同锁定）'}</label>
@@ -733,17 +1013,24 @@ function ItemEditor({ sku, groupId, suppliers, onBack, onSaved, onDeleted }) {
 
         <div className="form-group">
           <label>所属产品</label>
-          <select value={form.group_id} onChange={(e) => set('group_id', e.target.value)}>
-            {groupChoices.map((gc) => (
-              <option key={gc.id} value={gc.id}>
-                {gc.name}（{gc.item_count} 个货号）
-              </option>
-            ))}
-            {String(product.group_id) && !groupChoices.some((gc) => String(gc.id) === String(product.group_id)) && (
-              <option value={product.group_id}>{product.group_name || '当前产品'}</option>
-            )}
-            <option value="new">— 独立成新产品 —</option>
-          </select>
+          <SearchSelect
+            value={form.group_id}
+            onChange={(v) => set('group_id', v)}
+            options={[
+              ...groupChoices.map((gc) => ({
+                value: String(gc.id),
+                label: gc.name,
+                hint: `${gc.item_count} 个货号`
+              })),
+              ...(String(product.group_id) && !groupChoices.some((gc) => String(gc.id) === String(product.group_id))
+                ? [{ value: String(product.group_id), label: product.group_name || '当前产品' }]
+                : []),
+              { value: 'new', label: '— 独立成新产品 —' }
+            ]}
+            placeholder="选择所属产品"
+            searchPlaceholder="输入产品名搜索…"
+            emptyText="没有匹配的产品"
+          />
         </div>
 
         <div className="form-group">
@@ -752,13 +1039,17 @@ function ItemEditor({ sku, groupId, suppliers, onBack, onSaved, onDeleted }) {
         </div>
 
         <div className="form-actions">
-          <button className="btn btn-primary" onClick={save} disabled={saving}>
-            {saving ? '保存中…' : '保存'}
-          </button>
+          {canEdit && (
+            <button className="btn btn-primary" onClick={save} disabled={saving}>
+              {saving ? '保存中…' : '保存'}
+            </button>
+          )}
           <button className="btn" onClick={onBack} disabled={saving}>返回</button>
-          <button className="btn btn-danger" onClick={remove} disabled={saving}>
-            <TrashIcon size={14} /> 删除货号
-          </button>
+          {canEdit && (
+            <button className="btn btn-danger" onClick={remove} disabled={saving}>
+              <TrashIcon size={14} /> 删除货号
+            </button>
+          )}
         </div>
       </div>
 
@@ -770,6 +1061,13 @@ function ItemEditor({ sku, groupId, suppliers, onBack, onSaved, onDeleted }) {
           </details>
         </div>
       )}
+
+      {/* 包装信息：结构化录入单品/内盒/外箱/重量，并据此推算装柜量。
+          数据存在 happy 自己的库（product_packaging），与 SKU 服务的价格数据分开维护。 */}
+      <div className="panel">
+        <div className="panel-title">包装信息</div>
+        <PackagingPanel sku={product.sku} canEdit={canEdit} />
+      </div>
 
       <div className="panel">
         <div className="panel-title">调价记录</div>
@@ -792,6 +1090,13 @@ function ItemEditor({ sku, groupId, suppliers, onBack, onSaved, onDeleted }) {
                     {h.source_contract ? ` · ${h.source_contract}` : ''}
                     {h.supplier_name ? ` · ${h.supplier_name}` : ''}
                   </div>
+                  {/* 谁改的价：每次调价都要能追到操作人 */}
+                  <div className="timeline-op">
+                    <FingerprintIcon size={12} />
+                    {h.changed_by
+                      ? <>操作人 <b>{h.changed_by}</b></>
+                      : <span className="is-quiet">操作人未记录</span>}
+                  </div>
                 </div>
               </div>
             ))}
@@ -804,7 +1109,7 @@ function ItemEditor({ sku, groupId, suppliers, onBack, onSaved, onDeleted }) {
 
 /* ---------------------------- 新增产品抽屉 ---------------------------- */
 
-function NewProductDrawer({ suppliers, onClose, onCreated }) {
+function NewProductDrawer({ suppliers, onClose, onCreated, canEdit }) {
   const [form, setForm] = useState({
     name: '', brand: '', category: '', supplier_id: '', description: '',
     sku: '', spec: '', price: '', moq: '', itemDesc: ''
@@ -835,7 +1140,7 @@ function NewProductDrawer({ suppliers, onClose, onCreated }) {
           attributes: attrs.filter((a) => a.name.trim())
         }
       })
-      onCreated?.(data.group_id)
+      onCreated?.(data)
     } catch (e) {
       setError(e?.response?.data?.error || `创建失败：${e.message}`)
     } finally {
@@ -850,9 +1155,11 @@ function NewProductDrawer({ suppliers, onClose, onCreated }) {
       onClose={onClose}
       footer={
         <>
-          <button className="btn btn-primary" onClick={save} disabled={saving}>
-            {saving ? '创建中…' : '创建'}
-          </button>
+          {canEdit && (
+            <button className="btn btn-primary" onClick={save} disabled={saving}>
+              {saving ? '创建中…' : '创建'}
+            </button>
+          )}
           <button className="btn" onClick={onClose} disabled={saving}>取消</button>
         </>
       }
@@ -877,7 +1184,7 @@ function NewProductDrawer({ suppliers, onClose, onCreated }) {
         </div>
         <div className="form-group">
           <label>供应商</label>
-          <SupplierSelect value={form.supplier_id} suppliers={suppliers} onChange={(e) => set('supplier_id', e.target.value)} />
+          <SupplierSelect value={form.supplier_id} suppliers={suppliers} onChange={(v) => set('supplier_id', v)} />
         </div>
         <div className="form-group">
           <label>产品说明</label>
@@ -922,7 +1229,8 @@ function NewProductDrawer({ suppliers, onClose, onCreated }) {
 
 /* ------------------------------ 小推车抽屉 ------------------------------ */
 
-function CartDrawer({ onClose, onChanged }) {
+function CartDrawer({ onClose, onChanged, canEdit, canQuoteEdit }) {
+  const navigate = useNavigate()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -991,10 +1299,15 @@ function CartDrawer({ onClose, onChanged }) {
               {noPrice > 0 && <span className="secondary" style={{ marginLeft: 10 }}>{noPrice} 个货号库里没有采购价</span>}
             </span>
             <span style={{ flex: 1 }} />
-            <button className="btn btn-sm btn-danger" onClick={clear}>清空</button>
-            <button className="btn btn-primary" onClick={() => window.alert('汇总报价下一步接入：需要先定「从 CRM 选客户 / 自动带出单证字段」的方案，方案定了我就把报价单那步补上。')}>
-              汇总报价 →
-            </button>
+            {canEdit && <button className="btn btn-sm btn-danger" onClick={clear}>清空</button>}
+            {/* 这里刻意不走 onClose（那会触发 history.go）。
+                直接切路由，产品页整体卸载、抽屉一并消失即可；
+                留在历史里的那条层条目靠 mountId 认得出来，回头不会冒出幽灵抽屉。 */}
+            {canQuoteEdit && (
+              <button className="btn btn-primary" onClick={() => navigate('/quotes/new')}>
+                汇总报价 →
+              </button>
+            )}
           </>
         ) : null
       }
@@ -1035,17 +1348,35 @@ function CartDrawer({ onClose, onChanged }) {
                     type="number"
                     min="1"
                     step="1"
+                    data-cart-qty=""
                     placeholder={r.moq ? String(r.moq) : ''}
                     defaultValue={r.qty ?? ''}
                     onBlur={(e) => {
                       if (String(r.qty ?? '') !== e.target.value) setQty(r.sku, e.target.value)
                     }}
-                    onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur() }}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Enter') return
+                      e.preventDefault()
+                      // 回车 = 存下这一行并跳到下一行的数量框，连续录入不用碰鼠标。
+                      // 焦点一移开，上面的 onBlur 就会把当前值写回去。
+                      const list = e.currentTarget.closest('.cart-list')
+                      const inputs = list ? Array.from(list.querySelectorAll('input[data-cart-qty]')) : []
+                      const next = inputs[inputs.indexOf(e.currentTarget) + 1]
+                      if (next) {
+                        next.focus()
+                        next.select()                       // 选中已有数字，直接输入即可覆盖
+                        next.scrollIntoView({ block: 'nearest' })
+                      } else {
+                        e.currentTarget.blur()              // 最后一行：回车收尾
+                      }
+                    }}
                   />
                 </label>
-                <button className="btn btn-sm btn-icon btn-danger" title="移出小推车" onClick={() => removeRow(r.sku)}>
-                  <CloseIcon size={14} />
-                </button>
+                {canEdit && (
+                  <button className="btn btn-sm btn-icon btn-danger" title="移出小推车" onClick={() => removeRow(r.sku)}>
+                    <CloseIcon size={14} />
+                  </button>
+                )}
               </div>
             )
           })}
@@ -1063,6 +1394,10 @@ function ProductManagement() {
   const [supplierFilter, setSupplierFilter] = useState('')
   const [onlyLow, setOnlyLow] = useState(false)
 
+  const { user } = useAuth()
+  const canEdit = hasPermission(user, 'product.edit')
+  const canQuoteEdit = hasPermission(user, 'quote.edit')
+
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [notice, setNotice] = useState('')
@@ -1072,8 +1407,60 @@ function ProductManagement() {
   const [attrNames, setAttrNames] = useState([])
   const [cartCount, setCartCount] = useState(0)
 
+  /* 筛选用的供应商候选：多两个「全部 / 未分类」的伪选项 */
+  const supplierFilterOptions = useMemo(() => [
+    { value: '', label: '全部供应商' },
+    { value: 'none', label: '未分类（无供应商）' },
+    ...suppliers.map((s) => ({
+      value: String(s.id),
+      label: s.name,
+      hint: `${s.sku_count ?? 0} 个货号${categoryHint(s.main_categories, 1) ? ` · ${categoryHint(s.main_categories, 1)}` : ''}`
+    }))
+  ], [suppliers])
+
   const [selected, setSelected] = useState(() => new Set())
   const [panel, setPanel] = useState(null)
+  /* 抽屉里的编辑态（由 GroupDrawer 报上来），用来算历史层数 */
+  const [groupMode, setGroupMode] = useState({ kind: 'view' })
+  /* 本次挂载的令牌：用来认出上一次挂载残留在历史里的孤儿条目 */
+  const [mountId] = useState(() => makeMountId())
+
+  /* 本页现在压了几层历史：抽屉 1 层，抽屉里的编辑态再加 1 层。
+     刻意用「当前 UI 状态」算，而不是从 history.state 里读计数器 ——
+     否则用户开着抽屉点侧栏跳走再回来，会读到上一次挂载留下的脏层数，
+     关抽屉时多退几条，直接把人退出应用。 */
+  const layerCount = panel ? (groupMode && groupMode.kind !== 'view' ? 2 : 1) : 0
+
+  /* 抽屉也挂进浏览器历史：侧键返回时先收抽屉，而不是直接跳走 */
+  const openPanel = useCallback((next) => {
+    pushLayer(mountId, LAYER_PANEL, next)
+    setGroupMode({ kind: 'view' })
+    setPanel(next)
+  }, [mountId])
+
+  const closePanel = useCallback(() => {
+    // 一次退掉本页所有层（抽屉 + 抽屉里的编辑态），回到进入产品页时那条历史
+    if (layerCount > 0) popLayers(layerCount)
+    else setPanel(null)
+    setGroupMode({ kind: 'view' })
+  }, [layerCount])
+
+  useLayerRestore(mountId, LAYER_PANEL, (snapshot) => {
+    setPanel(snapshot && snapshot.kind ? snapshot : null)
+    if (!snapshot || !snapshot.kind) setGroupMode({ kind: 'view' })
+  }, '/products')
+
+  /* 挂载时擦掉当前历史条目上「上一次挂载」留下的浮层快照。
+     场景：开着抽屉直接点侧栏跳走，抽屉随组件卸载消失，但压进历史的条目还在；
+     回到本页时那条历史就是孤儿，留着会让 history.state 一直显示"抽屉开着"，
+     也让反复按返回时多逛几条无效历史。擦成干净条目即可（那些条目是我们自己 push 的，
+     不带路由 state，清成 null 不影响 React Router）。 */
+  useEffect(() => {
+    const s = window.history.state
+    if (s && typeof s.__tmsDepth === 'number' && s.__tmsMount !== mountId) {
+      window.history.replaceState(null, '')
+    }
+  }, [mountId])
 
   /* 关键词防抖 250ms */
   useEffect(() => {
@@ -1193,12 +1580,16 @@ function ProductManagement() {
           <p className="page-sub">按货号、品名、规格或参数检索产品与采购价</p>
         </div>
         <div className="header-actions">
-          <button className="btn" onClick={() => setPanel({ kind: 'cart' })}>
-            <CartIcon size={16} /> 小推车{cartCount > 0 && <span className="cart-badge">{cartCount}</span>}
-          </button>
-          <button className="btn btn-primary" onClick={() => setPanel({ kind: 'new' })}>
-            <PlusCircleIcon size={16} /> 新增产品
-          </button>
+          {canEdit && (
+            <button className="btn" onClick={() => openPanel({ kind: 'cart' })}>
+              <CartIcon size={16} /> 小推车{cartCount > 0 && <span className="cart-badge">{cartCount}</span>}
+            </button>
+          )}
+          {canEdit && (
+            <button className="btn btn-primary" onClick={() => openPanel({ kind: 'new' })}>
+              <PlusCircleIcon size={16} /> 新增产品
+            </button>
+          )}
         </div>
       </div>
 
@@ -1212,11 +1603,15 @@ function ProductManagement() {
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
         />
-        <select value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)}>
-          <option value="">全部供应商</option>
-          <option value="none">未分类（无供应商）</option>
-          {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
+        <SearchSelect
+          className="toolbar-supplier-filter"
+          value={supplierFilter}
+          onChange={(v) => setSupplierFilter(v)}
+          options={supplierFilterOptions}
+          placeholder="全部供应商"
+          searchPlaceholder="输入供应商名 / 主营类目搜索…"
+          emptyText="没有匹配的供应商"
+        />
         <label className="check-inline">
           <input type="checkbox" checked={onlyLow} onChange={(e) => setOnlyLow(e.target.checked)} />
           只看待核对
@@ -1232,8 +1627,8 @@ function ProductManagement() {
           <button className="btn btn-sm" onClick={invert}>反选</button>
           <button className="btn btn-sm" onClick={clearSel}>取消选择</button>
           <span style={{ flex: 1 }} />
-          <button className="btn btn-sm btn-primary" onClick={addToCart}>加入小推车</button>
-          <button className="btn btn-sm btn-danger" onClick={deleteSelected}>删除</button>
+          {canEdit && <button className="btn btn-sm btn-primary" onClick={addToCart}>加入小推车</button>}
+          {canEdit && <button className="btn btn-sm btn-danger" onClick={deleteSelected}>删除</button>}
         </div>
       )}
 
@@ -1282,7 +1677,7 @@ function ProductManagement() {
                   <tr
                     key={g.id}
                     className={picked ? 'row-picked' : ''}
-                    onClick={() => setPanel({ kind: 'group', groupId: g.id, highlightSku: g.matched_items?.[0]?.sku || null })}
+                    onClick={() => openPanel({ kind: 'group', groupId: g.id, highlightSku: g.matched_items?.[0]?.sku || null })}
                   >
                     <td onClick={(e) => e.stopPropagation()}>
                       <input
@@ -1319,24 +1714,36 @@ function ProductManagement() {
 
       {panel?.kind === 'group' && (
         <GroupDrawer
+          mountId={mountId}
           groupId={panel.groupId}
           highlightSku={panel.highlightSku}
           suppliers={suppliers}
-          onClose={() => setPanel(null)}
+          onClose={closePanel}
           onChanged={afterMutate}
+          onModeChange={setGroupMode}
+          canEdit={canEdit}
         />
       )}
 
       {panel?.kind === 'new' && (
         <NewProductDrawer
           suppliers={suppliers}
-          onClose={() => setPanel(null)}
-          onCreated={() => { setPanel(null); afterMutate() }}
-        />
+          onClose={closePanel}
+          canEdit={canEdit}
+        onCreated={(info) => {
+          closePanel()
+          afterMutate()
+          /* 撞号时后端自动落副本，明确告诉用户新建到手的到底是什么货号 */
+          if (info?.duplicated_from) {
+            setNoticeOk(true)
+            setNotice(`货号 ${info.duplicated_from} 已存在，已自动建成副本「${info.display_sku}」，并记下上传者`)
+          }
+        }}
+      />
       )}
 
       {panel?.kind === 'cart' && (
-        <CartDrawer onClose={() => { setPanel(null); refreshCart() }} onChanged={refreshCart} />
+        <CartDrawer onClose={() => { closePanel(); refreshCart() }} onChanged={refreshCart} canEdit={canEdit} canQuoteEdit={canQuoteEdit} />
       )}
     </div>
   )

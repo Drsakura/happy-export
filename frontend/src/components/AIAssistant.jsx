@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import axios from 'axios'
-import { BotIcon, CloseIcon, MinusIcon, SendIcon, SparkIcon } from './Icons'
+import { AIBotIcon, CloseIcon, MinusIcon, SendIcon, UserIcon } from './Icons'
 
 const POS_KEY = 'happy.aiPos'
-const WIN_WIDTH = 348
+const WIN_WIDTH = 440
 
 const starterMessages = [
   { role: 'assistant', text: '我是小皮，你的外贸业务助理。可以帮你查客户、产品、供应商、订单、商机和待办，也能代你发起系统内的操作。' },
@@ -135,22 +135,27 @@ function AIAssistant({ isOpen, onClose }) {
         onDoubleClick={() => setMinimized(value => !value)}
       >
         <div className="ai-panel-title">
-          <span className="ai-orb"><BotIcon size={16} /></span>
-          <div><span className="section-label">[COPILOT]</span><h2 id="ai-assistant-title">小皮</h2></div>
+          <span className="ai-orb"><AIBotIcon size={16} /></span>
+          <div className="ai-panel-heading">
+            <span className="ai-panel-kicker">BUSINESS COPILOT</span>
+            <h2 id="ai-assistant-title">小皮</h2>
+            <span className="ai-panel-subtitle">你的外贸业务助理</span>
+          </div>
         </div>
         <div className="ai-window-actions">
-          {!minimized && <span className="ai-live-dot" title="已连接系统业务层" />}
+          {!minimized && <span className="ai-status-label"><span className="ai-live-dot" />在线</span>}
           <button
             type="button"
-            className="ai-icon-btn"
+            className="ai-icon-btn ai-minimize-btn"
             onClick={() => setMinimized(value => !value)}
             aria-label={minimized ? '展开小皮' : '最小化小皮'}
             title={minimized ? '展开' : '最小化（也可以双击标题栏）'}
           >
-            {minimized ? <SparkIcon size={15} /> : <MinusIcon size={16} />}
+            {minimized ? <AIBotIcon size={15} /> : <MinusIcon size={16} />}
           </button>
-          <button type="button" className="ai-icon-btn" onClick={onClose} aria-label="关闭小皮" title="关闭">
+          <button type="button" className="ai-close-btn" onClick={onClose} aria-label="关闭小皮" title="关闭小皮">
             <CloseIcon size={15} />
+            <span>关闭</span>
           </button>
         </div>
       </div>
@@ -159,11 +164,11 @@ function AIAssistant({ isOpen, onClose }) {
         <React.Fragment>
           <div className="ai-panel-body">
             <div className="ai-access-banner"><span className="ai-live-dot" /><div><strong>已连接系统业务层</strong><small>可读取模块数据，敏感写操作会先请求确认</small></div></div>
-            <div className="ai-capability-card"><div className="ai-capability-heading"><SparkIcon size={15} />我能帮你</div>{capabilities.map(capability => <div className="ai-capability-row" key={capability}><span>✓</span>{capability}</div>)}</div>
+            <div className="ai-capability-card"><div className="ai-capability-heading">我能帮你</div>{capabilities.map(capability => <div className="ai-capability-row" key={capability}><span>✓</span>{capability}</div>)}</div>
             {context && <div className="ai-context-strip"><span>当前数据快照</span><b>{context.stats?.customers || 0} 客户</b><b>{context.stats?.products || 0} 产品</b><b>{context.stats?.orders || 0} 订单</b></div>}
             <div className="ai-message-list">
-              {messages.map((message, index) => <div className={`ai-message ${message.role}`} key={`${message.role}-${index}`}><div className="ai-message-avatar">{message.role === 'assistant' ? <BotIcon size={15} /> : 'W'}</div><div className="ai-message-content"><p>{message.text}</p>{message.meta && <small>{message.meta}</small>}</div></div>)}
-              {loading && <div className="ai-message assistant"><div className="ai-message-avatar"><BotIcon size={15} /></div><div className="ai-message-content ai-thinking"><span /><span /><span /></div></div>}
+              {messages.map((message, index) => <div className={`ai-message ${message.role}`} key={`${message.role}-${index}`}><div className="ai-message-avatar">{message.role === 'assistant' ? <AIBotIcon size={15} /> : <UserIcon size={15} />}</div><div className="ai-message-content"><p>{message.text}</p>{message.meta && <small>{message.meta}</small>}</div></div>)}
+              {loading && <div className="ai-message assistant"><div className="ai-message-avatar"><AIBotIcon size={15} /></div><div className="ai-message-content ai-thinking"><span /><span /><span /></div></div>}
             </div>
           </div>
 
@@ -177,3 +182,4 @@ function AIAssistant({ isOpen, onClose }) {
 }
 
 export default AIAssistant
+

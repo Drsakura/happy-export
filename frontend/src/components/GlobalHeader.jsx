@@ -1,24 +1,29 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { BotIcon, CloudDbIcon, PlusCircleIcon, SearchIcon } from './Icons'
+import { BotIcon, CloudDbIcon, PlusCircleIcon, SearchIcon, TrashIcon } from './Icons'
+import { useAuth, roleLabel } from '../auth'
+import { useBranding } from '../branding'
 import TimeZoneClock from './TimeZoneClock'
 import FxCalculator from './FxCalculator'
 import { HOME_PATH, PAGE_LABELS } from '../navigation'
 
 const TABS_STORAGE_KEY = 'happy.openTabs'
-const MAX_TABS = 10
+/* 工作台恒定占第一位，后面最多再挂 4 个页面 */
+const MAX_TAB_PAGES = 4
+const MAX_TABS = MAX_TAB_PAGES + 1
 
 /* 从本地缓存读取上次打开的页面（只保留仍然存在的路由，工作台恒定在首位） */
 function readStoredTabs() {
   try {
     const raw = JSON.parse(localStorage.getItem(TABS_STORAGE_KEY) || '[]')
-    const list = Array.isArray(raw) ? raw.filter(path => PAGE_LABELS[path]) : []
-    return [HOME_PATH, ...list.filter(path => path !== HOME_PATH)]
+    const list = Array.isArray(raw) ? raw.filter(path => PAGE_LABELS[path] && path !== HOME_PATH) : []
+    return [HOME_PATH, ...list.slice(0, MAX_TAB_PAGES)]
   } catch { return [HOME_PATH] }
 }
 
-function GlobalHeader({ onOpenAssistant }) {
+function GlobalHeader({ onOpenAssistant, onNavigate }) {
+  const { user } = useAuth()
   const [now, setNow] = useState(new Date())
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -59,7 +64,16 @@ function GlobalHeader({ onOpenAssistant }) {
     const next = openTabs.filter(item => item !== path)
     const result = next.length ? next : [HOME_PATH]
     setOpenTabs(result)
-    if (path === location.pathname) navigate(result[0])
+    if (path === location.pathname) {
+      /* 退到「最近使用过的另一个页面」，全关光了才回工作台 */
+      navigate(result.find(item => item !== HOME_PATH) || HOME_PATH)
+    }
+  }
+
+  /* 清空快捷标签：工作台常驻不动，其余一次性摘掉；当前页若被清掉就回工作台 */
+  const clearTabs = () => {
+    setOpenTabs([HOME_PATH])
+    if (location.pathname !== HOME_PATH && PAGE_LABELS[location.pathname]) navigate(HOME_PATH)
   }
 
   useEffect(() => {
@@ -88,11 +102,22 @@ function GlobalHeader({ onOpenAssistant }) {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  const selectResult = result => { navigate(result.path); setQuery(''); setSearchOpen(false) }
+  /* 页内所有跳转都走外壳的 guardedNavigate：个人资料有未保存改动时会先弹确认 */
+  const go = React.useCallback(path => {
+    if (onNavigate) onNavigate(path)
+    else navigate(path)
+  }, [onNavigate, navigate])
+
+  const selectResult = result => { go(result.path); setQuery(''); setSearchOpen(false) }
+
+  const displayName = user?.display_name || user?.username || '未登录'
+  const brand = useBranding()
+  const positionText = user?.position || roleLabel(user?.role)
+  const avatarText = (displayName || '?').slice(0, 1).toUpperCase()
 
   return (
     <header className="global-header">
-      <div className="global-header-brand"><span className="brand-mark" title="happy出口通"><CloudDbIcon size={36} /><span className="header-status-dot" /></span><div><strong>happy出口通</strong><span>EXPORT OPERATIONS CONSOLE</span></div></div>
+      <div className="global-header-brand"><span className="brand-mark" title={brand.name}><CloudDbIcon size={36} /><span className="header-status-dot" /></span><div><strong>{brand.name}</strong><span>{brand.subtitle}</span></div></div>
       <div className={`global-search ${searchOpen ? 'is-open' : ''}`}>
         <SearchIcon size={17} />
         <input type="text" ref={searchRef} aria-label="搜索 everything" value={query} onFocus={() => setSearchOpen(true)} onChange={event => setQuery(event.target.value)} placeholder="搜索 everything" autoComplete="off" />
@@ -110,13 +135,24 @@ function GlobalHeader({ onOpenAssistant }) {
           const active = location.pathname === path
           return (
             <div key={path} className={`page-tab${active ? ' active' : ''}`}>
-              <button type="button" className="page-tab-label" title={label} aria-current={active ? 'page' : undefined} onClick={() => navigate(path)}>{label}</button>
+              <button type="button" className="page-tab-label" title={label} aria-current={active ? 'page' : undefined} onClick={() => go(path)}>{label}</button>
               {!isHome && <button type="button" className="page-tab-close" aria-label={`关闭${label}`} title={`关闭${label}`} onClick={event => closeTab(event, path)}>×</button>}
             </div>
           )
         })}
       </nav>
-      <div className="global-header-actions"><TimeZoneClock now={now} /><FxCalculator /><button className="quick-create-btn" title="快速新建"><PlusCircleIcon size={19} /><span>快速新建</span></button><button className="ai-entry-btn" onClick={onOpenAssistant} title="打开小皮"><BotIcon size={19} /><span>小皮</span><i>β</i></button><button className="header-avatar" title="当前用户">W</button><button className="mobile-search-btn" onClick={() => { setSearchOpen(v => !v); window.setTimeout(() => searchRef.current?.focus(), 0) }} title="搜索"><SearchIcon size={18} /></button></div>
+      {openTabs.length > 1 && (
+        <button
+          type="button"
+          className="page-tabs-clear"
+          onClick={clearTabs}
+          aria-label="清空快捷标签"
+          title="清空快捷标签（工作台保留）"
+        >
+          <TrashIcon size={14} />
+        </button>
+      )}
+      <div className="global-header-actions"><TimeZoneClock now={now} /><FxCalculator /><button className="quick-create-btn" title="快速新建"><PlusCircleIcon size={19} /><span>快速新建</span></button><button className="ai-entry-btn" onClick={onOpenAssistant} title="打开小皮"><BotIcon size={19} /><span>小皮</span><i>β</i></button><button type="button" className="header-user" onClick={() => go('/profile')} title={`${displayName} · ${positionText} · 个人资料`} aria-label="个人资料"><span className="header-avatar">{user?.avatar ? <img src={user.avatar} alt="" /> : avatarText}</span><span className="header-user-text"><b>{displayName}</b><small>{positionText}</small></span></button><button className="mobile-search-btn" onClick={() => { setSearchOpen(v => !v); window.setTimeout(() => searchRef.current?.focus(), 0) }} title="搜索"><SearchIcon size={18} /></button></div>
     </header>
   )
 }

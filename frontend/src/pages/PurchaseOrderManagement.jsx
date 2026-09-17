@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import axios from 'axios'
+import { SkeletonTableRows } from '../components/Skeleton'
+import { useAuth, hasPermission } from '../auth'
 
 /**
  * 采购单管理
  * 数据来源：happy 后端 /api/purchase-orders（P1 后端合并阶段开放）
  */
 function PurchaseOrderManagement() {
+  const { user } = useAuth()
+  const canEdit = hasPermission(user, 'purchase.edit')
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [keyword, setKeyword] = useState('')
@@ -31,7 +35,7 @@ function PurchaseOrderManagement() {
     <div className="page-container">
       <div className="page-header">
         <h1 className="page-title">采购单管理</h1>
-        <button className="btn btn-primary">+ 新建采购单</button>
+        {canEdit && <button className="btn btn-primary">+ 新建采购单</button>}
       </div>
 
       <div className="toolbar">
@@ -62,7 +66,7 @@ function PurchaseOrderManagement() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan="7" className="empty-state">加载中...</td></tr>
+              <SkeletonTableRows rows={5} widths={[1.2, 1.6, 1, 1, 1.2, 0.8, 1]} />
             ) : rows.length === 0 ? (
               <tr>
                 <td colSpan="7" className="empty-state">
@@ -81,7 +85,7 @@ function PurchaseOrderManagement() {
                   <td><span className={`status-badge status-${o.status}`}>{statusText(o.status)}</span></td>
                   <td>
                     <button className="btn-link">查看</button>
-                    <button className="btn-link">编辑</button>
+                    {canEdit && <button className="btn-link">编辑</button>}
                   </td>
                 </tr>
               ))

@@ -30,6 +30,39 @@ export const CURRENCY_NAMES = {
   HRK: '克罗地亚库纳', ALL: '阿尔巴尼亚列克', MKD: '北马其顿第纳尔'
 }
 
+/**
+ * 汇率计算器用的「主流币种」白名单，按 2024 年中国对其出口金额从高到低排。
+ *
+ * 排序依据：联合国 COMTRADE / Trading Economics 2024 年中国出口目的地金额。
+ * 美国 5257 亿 > 中国香港 2910 亿 > 日本 1520 亿 > 俄罗斯 1153 亿 >
+ * 马来西亚 1015 亿 > 新加坡 791 亿 > 中国台湾 753 亿 > 澳大利亚 708 亿 >
+ * 阿联酋 656 亿 > 沙特 500 亿 > 加拿大 465 亿。
+ * 欧元按欧元区合计（德 1071 亿 + 荷 912 亿 + 意 462 亿 + 法 450 亿 + 西 409 亿 …）
+ * 计入，量级仅次于美国，所以排在美国之后。人民币是本币，按需求紧随美元。
+ */
+export const PRIMARY_CURRENCIES = [
+  'USD', 'CNY', 'EUR', 'HKD', 'JPY', 'RUB', 'MYR', 'SGD', 'TWD', 'AUD', 'AED', 'SAR', 'CAD'
+]
+
+/** 币种对应的国家 / 地区（中国香港、中国台湾按中国区划标注）。 */
+export const CURRENCY_REGIONS = {
+  USD: '美国', CNY: '中国', EUR: '欧元区', HKD: '中国香港', JPY: '日本',
+  RUB: '俄罗斯', MYR: '马来西亚', SGD: '新加坡', TWD: '中国台湾', AUD: '澳大利亚',
+  AED: '阿联酋', SAR: '沙特阿拉伯', CAD: '加拿大'
+}
+
+/**
+ * 汇率计算器的币种下拉：只给主流 13 种，顺序完全由 PRIMARY_CURRENCIES 决定。
+ * 不用看接口返回的 160+ 币种 —— 这是「常用币种快捷入口」，不是全量币种表。
+ */
+export function buildPrimaryCurrencyOptions() {
+  return PRIMARY_CURRENCIES.map(code => ({
+    code,
+    name: CURRENCY_NAMES[code] || '',
+    region: CURRENCY_REGIONS[code] || ''
+  }))
+}
+
 /** 下拉排序权重：外贸结算最常见的排前面。 */
 const ORDER = [
   'USD', 'CNY', 'EUR', 'GBP', 'HKD', 'JPY', 'AUD', 'CAD', 'SGD', 'CHF', 'NZD', 'KRW',

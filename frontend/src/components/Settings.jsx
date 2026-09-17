@@ -1,9 +1,33 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, Suspense } from 'react'
 import axios from 'axios'
-import { MoonStarsIcon, SunIcon, TuneIcon, CheckIcon, CloseIcon, ExchangeIcon, SparkIcon, RefreshIcon } from './Icons'
+import { MoonStarsIcon, SunIcon, TuneIcon, CheckIcon, CloseIcon, ExchangeIcon, SparkIcon, RefreshIcon, BuildingIcon } from './Icons'
+import { useAuth, hasPermission } from '../auth'
+import { useBranding } from '../branding'
+
+/* 这两块只有系统管理账号会看，按需加载：设置本身在外壳里是静态引入的，
+   跟着首屏一起下发等于给所有人多下载十几 KB。 */
+const AIConfigSettings = React.lazy(() => import('./AIConfigSettings'))
+const OrgBrandingSettings = React.lazy(() => import('./OrgBrandingSettings'))
+
+/* 设置分类。带 permission 的项只对有该权限点的人显示 ——
+   智能配置里有接口地址与密钥，组织品牌是系统管理动作，都不该摆在业务员眼前。 */
+const CATEGORIES = [
+  { key: 'appearance', label: '外观与主题', icon: TuneIcon },
+  { key: 'organization', label: '组织与品牌', icon: BuildingIcon, permission: 'branding.manage' },
+  { key: 'import-export', label: '数据交换', icon: ExchangeIcon },
+  { key: 'ai-config', label: '智能配置', icon: SparkIcon, permission: 'ai.manage' },
+  { key: 'system-update', label: '系统与更新', icon: RefreshIcon }
+]
 
 function Settings({ isOpen, onClose, theme, onThemeChange, reducedMotion, onReducedMotionChange }) {
+  const { user } = useAuth()
   const [activeCategory, setActiveCategory] = useState('appearance')
+
+  const visibleCategories = CATEGORIES.filter(item => !item.permission || hasPermission(user, item.permission))
+  /* 打开着设置时权限被收回（换了角色），当前分类可能已经不可见，退回第一项 */
+  const current = visibleCategories.some(item => item.key === activeCategory)
+    ? activeCategory
+    : visibleCategories[0]?.key
 
   const modalRef = useRef(null)
   useEffect(() => {
@@ -39,37 +63,36 @@ function Settings({ isOpen, onClose, theme, onThemeChange, reducedMotion, onRedu
         <aside className="settings-sidebar">
           <div className="settings-header">
             <div>
-              <span className="section-label">[CONTROL CENTER]</span>
               <h2 id="settings-title">系统设置</h2>
             </div>
             <button className="close-btn" onClick={onClose} aria-label="关闭设置"><CloseIcon size={18} /></button>
           </div>
           <nav className="settings-nav" aria-label="设置分类">
-            <button className={`settings-nav-item ${activeCategory === 'appearance' ? 'active' : ''}`} onClick={() => setActiveCategory('appearance')}>
-              <span className="settings-nav-icon"><TuneIcon size={16} /></span>
-              <span>外观与主题</span>
-            </button>
-            <button className={`settings-nav-item ${activeCategory === 'import-export' ? 'active' : ''}`} onClick={() => setActiveCategory('import-export')}>
-              <span className="settings-nav-icon"><ExchangeIcon size={18} /></span>
-              <span>数据交换</span>
-            </button>
-            <button className={`settings-nav-item ${activeCategory === 'ai-config' ? 'active' : ''}`} onClick={() => setActiveCategory('ai-config')}>
-              <span className="settings-nav-icon"><SparkIcon size={18} /></span>
-              <span>智能配置</span>
-            </button>
-            <button className={`settings-nav-item ${activeCategory === 'system-update' ? 'active' : ''}`} onClick={() => setActiveCategory('system-update')}>
-              <span className="settings-nav-icon"><RefreshIcon size={18} /></span>
-              <span>系统与更新</span>
-            </button>
+            {visibleCategories.map(item => {
+              const Icon = item.icon
+              return (
+                <button
+                  key={item.key}
+                  className={`settings-nav-item ${current === item.key ? 'active' : ''}`}
+                  onClick={() => setActiveCategory(item.key)}
+                >
+                  <span className="settings-nav-icon"><Icon size={17} /></span>
+                  <span>{item.label}</span>
+                </button>
+              )
+            })}
           </nav>
           <div className="settings-sidebar-status"><TuneIcon size={15} /><span>专注业务，自在掌控<small>TRADE MANAGEMENT</small></span></div>
         </aside>
 
         <section className="settings-content">
-          {activeCategory === 'appearance' && <AppearanceSettings theme={theme} onThemeChange={onThemeChange} reducedMotion={reducedMotion} onReducedMotionChange={onReducedMotionChange} />}
-          {activeCategory === 'import-export' && <ImportExportSettings />}
-          {activeCategory === 'ai-config' && <AIConfigSettings />}
-          {activeCategory === 'system-update' && <SystemUpdateSettings />}
+          <Suspense fallback={<div className="settings-section"><p className="settings-description">正在载入…</p></div>}>
+            {current === 'appearance' && <AppearanceSettings theme={theme} onThemeChange={onThemeChange} reducedMotion={reducedMotion} onReducedMotionChange={onReducedMotionChange} />}
+            {current === 'organization' && <OrgBrandingSettings />}
+            {current === 'import-export' && <ImportExportSettings />}
+            {current === 'ai-config' && <AIConfigSettings />}
+            {current === 'system-update' && <SystemUpdateSettings />}
+          </Suspense>
         </section>
       </div>
     </div>
@@ -79,7 +102,6 @@ function Settings({ isOpen, onClose, theme, onThemeChange, reducedMotion, onRedu
 function AppearanceSettings({ theme, onThemeChange, reducedMotion, onReducedMotionChange }) {
   return (
     <div className="settings-section">
-      <span className="section-label">[APPEARANCE]</span>
       <h3>外观与主题</h3>
       <p className="settings-description">选择适合工作环境的显示模式，设置会自动保存在本机。</p>
 
@@ -109,7 +131,6 @@ function AppearanceSettings({ theme, onThemeChange, reducedMotion, onReducedMoti
 function ImportExportSettings() {
   return (
     <div className="settings-section">
-      <span className="section-label">[DATA EXCHANGE]</span>
       <h3>导入 / 导出</h3>
       <p className="settings-description">管理业务数据的导入、导出与本地备份。</p>
       <div className="settings-group"><h4>导出数据</h4><div className="settings-actions"><button className="btn btn-secondary">导出供应商数据</button><button className="btn btn-secondary">导出产品数据</button><button className="btn btn-secondary">导出客户数据</button><button className="btn btn-secondary">导出订单数据</button></div></div>
@@ -119,19 +140,7 @@ function ImportExportSettings() {
   )
 }
 
-function AIConfigSettings() {
-  return (
-    <div className="settings-section">
-      <span className="section-label">[INTELLIGENCE]</span>
-      <h3>智能配置</h3>
-      <p className="settings-description">配置 AI 功能相关参数与模型。</p>
-      <div className="settings-group"><h4>API 密钥配置</h4><div className="form-group"><label>OpenAI API Key</label><input type="password" placeholder="sk-..." className="form-input" /></div><div className="form-group"><label>Claude API Key</label><input type="password" placeholder="sk-ant-..." className="form-input" /></div><p className="help-text">当前为配置界面预览，密钥保存和连接测试尚未接入。</p></div>
-      <div className="settings-group"><h4>AI 功能开关</h4><label className="setting-toggle"><span><strong>启用合同智能解析</strong><small>自动提取合同关键字段</small></span><input type="checkbox" defaultChecked /><i /></label><label className="setting-toggle"><span><strong>启用客户画像分析</strong><small>辅助判断客户跟进优先级</small></span><input type="checkbox" defaultChecked /><i /></label><label className="setting-toggle"><span><strong>启用自动报价建议</strong><small>基于历史价格提供参考</small></span><input type="checkbox" /><i /></label></div>
-      <div className="settings-group"><h4>模型选择</h4><div className="form-group"><label>OCR 模型</label><select className="form-select"><option>GPT-4 Vision</option><option>Claude 3 Opus</option><option>Claude 3 Sonnet</option></select></div><div className="form-group"><label>文本分析模型</label><select className="form-select"><option>GPT-4</option><option>Claude 3 Opus</option><option>GPT-3.5 Turbo</option></select></div></div>
-      <div className="settings-actions"><button className="btn btn-primary">保存配置</button><button className="btn btn-secondary">测试连接</button></div>
-    </div>
-  )
-}
+/* 智能配置已拆到 ./AIConfigSettings（多模型接入 + 用途分配）与 ./OrgBrandingSettings（组织与品牌） */
 
 /* ---------------------------------------------------------------------------
    系统与更新
@@ -139,6 +148,7 @@ function AIConfigSettings() {
    版本号以顶层 package.json 为准；远端取 Release（优先）或 tag。
 --------------------------------------------------------------------------- */
 function SystemUpdateSettings() {
+  const brand = useBranding()
   const [info, setInfo] = useState(null)
   const [repo, setRepo] = useState('')
   const [loadingInfo, setLoadingInfo] = useState(true)
@@ -194,7 +204,6 @@ function SystemUpdateSettings() {
 
   return (
     <div className="settings-section">
-      <span className="section-label">[SYSTEM]</span>
       <h3>系统与更新</h3>
       <p className="settings-description">查看当前版本与运行环境，并从官方仓库检查是否有新版本。</p>
 
@@ -202,7 +211,7 @@ function SystemUpdateSettings() {
         <h4>当前版本</h4>
         <div className="setting-info">
           <span>
-            <strong>{info ? `happy 出口通 v${info.version}` : '正在读取版本…'}</strong>
+            <strong>{info ? `${brand.name} v${info.version}` : '正在读取版本…'}</strong>
             <small>{info ? `运行环境 Node ${info.node} · ${info.platform} ${info.arch}` : '读取本机信息中'}</small>
           </span>
           <span className="preference-badge">正式版</span>

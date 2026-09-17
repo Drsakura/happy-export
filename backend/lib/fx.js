@@ -23,8 +23,8 @@ const CACHE_FILE = path.join(DATA_DIR, 'fx-cache.json');
 
 /** 内存缓存的保鲜期：1 小时后下次访问会去拉新数据。 */
 const TTL_MS = 60 * 60 * 1000;
-/** 单个数据源的超时。 */
-const TIMEOUT_MS = 8000;
+/** 单个数据源的超时。多个源是并行竞速的，所以这基本等于整体最坏耗时。 */
+const TIMEOUT_MS = 5000;
 const USER_AGENT = 'happy-export-fx';
 
 /* ------------------------------ 数据源 ------------------------------ */
@@ -149,25 +149,41 @@ let memory = readDiskCache();
 /** 同一个进程里并发调用只发一次网络请求。 */
 let inflight = null;
 
+/**
+ * 刷新汇率表。
+ *
+ * 所有数据源**并行竞速**，第一个拿到完整数据的胜出。
+ * 早先这里是串行 for 循环，一次网络抖动要等 8s × 2 = 16s 才回退，
+ * 用户看到的是「刷新失败 + 3 天前的旧数据」——其实另一个源可能早就成功了。
+ * 并行之后最坏情况只等一个超时周期。
+ */
 async function refresh() {
-  for (const provider of PROVIDERS) {
+  const attempts = PROVIDERS.map(async provider => {
     const json = await fetchJson(provider.url);
     const picked = json && provider.pick(json);
-    if (!picked) continue;
+    if (!picked) throw new Error(`${provider.id} 无数据`);
     const rates = sanitizeRates(picked.rates);
-    if (Object.keys(rates).length < 10) continue; // 明显不完整，换下一个源
-    const payload = {
-      rates,
-      updatedAt: picked.updatedAt,
-      fetchedAt: Date.now(),
-      source: provider.id,
-      sourceLabel: provider.label
-    };
-    memory = payload;
-    writeDiskCache(payload);
-    return payload;
+    if (Object.keys(rates).length < 10) throw new Error(`${provider.id} 数据不完整`);
+    return { provider, rates, updatedAt: picked.updatedAt };
+  });
+
+  let winner;
+  try {
+    winner = await Promise.any(attempts);
+  } catch {
+    return null; // 所有源都失败，交给 getRates 走缓存 / 离线兜底
   }
-  return null;
+
+  const payload = {
+    rates: winner.rates,
+    updatedAt: winner.updatedAt,
+    fetchedAt: Date.now(),
+    source: winner.provider.id,
+    sourceLabel: winner.provider.label
+  };
+  memory = payload;
+  writeDiskCache(payload);
+  return payload;
 }
 
 /**

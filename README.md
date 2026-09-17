@@ -21,7 +21,6 @@
 ### 后端
 - Node.js + Express
 - SQLite + better-sqlite3-multiple-ciphers
-- 加密存储（SQLCipher）
 
 ### 前端
 - React 18
@@ -70,7 +69,7 @@ npm run dev
 ## 项目结构
 
 ```
-trade-management-system/
+happy-export/
 ├── backend/              # 后端
 │   ├── db/              # 数据库
 │   │   ├── schema.sql   # 数据库结构
@@ -96,12 +95,30 @@ trade-management-system/
 └── README.md
 ```
 
-## 数据库
+## 数据库与配置
 
-使用 SQLite + SQLCipher 加密存储：
-- 数据库文件: `backend/data/trade.db`
-- 自动初始化表结构
+SQLite 单文件存储：
+
+- 数据库文件：`backend/data/trade.db`
+- 首次启动时自动建表
 - 支持备份和迁移
+- 数据目录与上传文件已在 `.gitignore` 中排除，不会入库
+
+> **已知限制：数据库当前未加密。** 驱动选用的是 `better-sqlite3-multiple-ciphers`
+> （本身具备 SQLCipher 能力），但代码尚未设置加密密钥，`trade.db` 以明文存放。
+> 部署到共享主机或不可信环境前，请自行启用磁盘加密。
+
+后端可识别的环境变量（全部有代码默认值，不设置也能跑）：
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `DATA_DIR` | `backend/data` | 数据库与汇率缓存所在目录 |
+| `PORT` | `4300` | 后端监听端口 |
+| `CONTRACT_RETENTION_DAYS` | `7` | 合同导入原文件的保留天数 |
+| `HAPPY_UPDATE_REPO` | `Drsakura/happy-export` | 在线更新检查所用的 GitHub 仓库 |
+
+> 注意：后端**没有引入 dotenv**，不会自动读取 `.env` 文件。
+> 请通过系统环境变量、启动脚本或容器编排来设置上述变量。
 
 ## 开发计划
 
@@ -137,7 +154,11 @@ trade-management-system/
 
 ## 许可证
 
-私有项目
+本项目采用 [GNU Affero 通用公共许可证 v3.0](LICENSE)（AGPL-3.0）。
+
+你可以自由使用、修改和分发，但需要遵守 AGPL-3.0 的核心义务：
+**如果你修改后的版本通过网络对外提供服务，必须向使用者公开你的完整源代码**，
+并以同样的许可证授权。完整的条款见 [LICENSE](LICENSE)。
 
 ## 作者
 

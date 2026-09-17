@@ -4,6 +4,7 @@
  */
 const express = require('express');
 const updater = require('../lib/updater');
+const branding = require('../lib/branding');
 
 const router = express.Router();
 
@@ -42,6 +43,19 @@ router.get('/check-update', async (req, res) => {
   } catch (error) {
     // checkUpdate 内部已兜底，走到这里说明是意料之外的问题
     res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/system/branding
+ * 品牌与组织名。公开接口 —— 登录页在拿到会话之前就得知道系统叫什么。
+ * 只回显示用的名字，不含任何业务数据。
+ */
+router.get('/branding', (req, res) => {
+  try {
+    res.json(branding.getBranding());
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 

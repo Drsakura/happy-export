@@ -191,6 +191,23 @@ export const PlusCircleIcon = ({ size = 20, className = '' }) => (
 export const BotIcon = ({ size = 20, className = '' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true"><rect x="4" y="7" width="16" height="12" rx="3" /><path d="M12 3v4M8 12h.01M16 12h.01M8 16h8" /><path d="M2 12h2M20 12h2" /></svg>
 )
+
+/* 小皮专属标志 —— 跟 lucide 通用 BotIcon 区分：
+ *   - 头部加 16% 浅填充（视觉重量更足，缩略尺寸下也认得出）
+ *   - 眼睛从「点」改「实心圆」（更可爱）
+ *   - 嘴巴从「横线」改「弧线」（更友善）
+ *   - 去掉 lucide Bot 两侧那两根短横线（视觉上像「耳朵」又不像，反而显得莫名）
+ *   - 头顶触角末端加一颗实心小星点（暗示 AI） */
+export const AIBotIcon = ({ size = 20, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <rect x="4" y="9" width="16" height="11" rx="3.5" fill="currentColor" fillOpacity="0.16" />
+    <path d="M12 5v4" />
+    <circle cx="12" cy="4.5" r="0.9" fill="currentColor" stroke="none" />
+    <circle cx="9" cy="14" r="1.2" fill="currentColor" stroke="none" />
+    <circle cx="15" cy="14" r="1.2" fill="currentColor" stroke="none" />
+    <path d="M9.5 17.2c.6.7 4.4.7 5 0" />
+  </svg>
+)
 export const SendIcon = ({ size = 20, className = '' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></svg>
 )
@@ -241,6 +258,22 @@ export const QuoteIcon = ({ size = 20, className = '' }) => (
     <polyline points="14 2 14 8 20 8" />
     <path d="M12 11v8" />
     <path d="M14 12.4h-2.9a1.5 1.5 0 0 0 0 3h1.8a1.5 1.5 0 0 1 0 3H10" />
+  </svg>
+)
+
+/* 询盘：来信气泡 + 内含报价行 */
+export const InquiryIcon = ({ size = 20, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <path d="M21 12.4a7.6 7.6 0 0 1-7.6 7.6H8.4L3 22.2V8.8A7.6 7.6 0 0 1 10.6 1.2h2.8A7.6 7.6 0 0 1 21 8.8z" />
+    <path d="M8 8.6h8M8 12h5" />
+  </svg>
+)
+
+/* 合同清洗：漏斗过滤 + 落料 */
+export const CleanupIcon = ({ size = 20, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <path d="M3 4.4h18l-7.2 8.4v6.2l-3.6 2.2v-8.4z" />
+    <path d="M6.6 8.1h10.8" />
   </svg>
 )
 
@@ -329,3 +362,130 @@ export const PencilIcon = ({ size = 16, className = '' }) => (
     <path d="m14.7 5.5 3.8 3.8" />
   </svg>
 )
+
+/* 返回 / 左箭头 */
+export const ArrowLeftIcon = ({ size = 16, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <path d="M19 12H5" />
+    <path d="m11 18-6-6 6-6" />
+  </svg>
+)
+
+/* 盾牌 / 权限 */
+export const ShieldIcon = ({ size = 20, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <path d="M12 3l7 3v6c0 4.3-2.9 7.8-7 9-4.1-1.2-7-4.7-7-9V6z" />
+    <path d="m9 12 2.2 2.2L15.5 10" />
+  </svg>
+)
+
+/* 地球 / 公海 */
+export const GlobeIcon = ({ size = 20, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M3.2 9h17.6M3.2 15h17.6" />
+    <path d="M12 3c2.4 2.5 3.6 5.5 3.6 9s-1.2 6.5-3.6 9c-2.4-2.5-3.6-5.5-3.6-9S9.6 5.5 12 3z" />
+  </svg>
+)
+
+/* 单人 / 个人资料 */
+export const UserIcon = ({ size = 20, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <circle cx="12" cy="8.2" r="3.7" />
+    <path d="M4.6 20c.6-3.6 3.6-5.6 7.4-5.6s6.8 2 7.4 5.6" />
+  </svg>
+)
+
+/* 钥匙 / 密码 */
+export const KeyIcon = ({ size = 18, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <circle cx="8" cy="15" r="4" />
+    <path d="m11 12 8.5-8.5M17 6l2 2M14.5 8.5l2 2" />
+  </svg>
+)
+
+/* 建筑 / 组织 */
+export const BuildingIcon = ({ size = 18, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <path d="M4 21V5.2A1.2 1.2 0 0 1 5.2 4h8.6a1.2 1.2 0 0 1 1.2 1.2V21" />
+    <path d="M15 10h3.8A1.2 1.2 0 0 1 20 11.2V21M2.5 21h19" />
+    <path d="M7.5 8h4M7.5 12h4M7.5 16h4" />
+  </svg>
+)
+
+/* 保存 / 勾选存盘 */
+export const SaveIcon = ({ size = 16, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <path d="M5 3.8h11L20.2 8v12.2A1.8 1.8 0 0 1 18.4 22H5a1.8 1.8 0 0 1-1.8-1.8V5.6A1.8 1.8 0 0 1 5 3.8z" />
+    <path d="M7.6 3.8v5.4h7.6V3.8M7.6 22v-6.2h8.8V22" />
+  </svg>
+)
+
+/* 登出 */
+export const LogoutIcon = ({ size = 16, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <path d="M14.5 4.5H6.8A1.8 1.8 0 0 0 5 6.3v11.4a1.8 1.8 0 0 0 1.8 1.8h7.7" />
+    <path d="M18 12H10M15.4 8.6 18.8 12l-3.4 3.4" />
+  </svg>
+)
+
+/* 相机 / 换头像 */
+export const CameraIcon = ({ size = 16, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <path d="M3.5 8.4h3l1.4-2.2h6.2L15.5 8.4h4A1.5 1.5 0 0 1 21 9.9v8.2a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.1V9.9a1.5 1.5 0 0 1 1.5-1.5z" />
+    <circle cx="12" cy="13.6" r="3.2" />
+  </svg>
+)
+
+/* 眼睛 / 显示密码 */
+export const EyeIcon = ({ size = 16, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+)
+
+/* 眼睛（划线）/ 隐藏密码 */
+export const EyeOffIcon = ({ size = 16, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <path d="M4 4l16 16" />
+    <path d="M9.6 5.9A9.6 9.6 0 0 1 12 5.8c6 0 9.5 6.2 9.5 6.2a17 17 0 0 1-2.7 3.5M6.4 8.2A16.8 16.8 0 0 0 2.5 12S6 18.2 12 18.2c1.3 0 2.4-.3 3.4-.7" />
+    <path d="M10 10.2a3 3 0 0 0 4 4" />
+  </svg>
+)
+
+/* 加号 / 新增 */
+export const PlusIcon = ({ size = 16, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <path d="M12 5v14M5 12h14" />
+  </svg>
+)
+
+/* 上传 / 上传者 */
+export const UploadIcon = ({ size = 14, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <path d="M12 16V4" />
+    <path d="m7.5 8.5 4.5-4.5 4.5 4.5" />
+    <path d="M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15" />
+  </svg>
+)
+
+/* 副本 / 复制 */
+export const CopyIcon = ({ size = 14, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <rect x="9" y="9" width="11" height="11" rx="2" />
+    <path d="M15 6.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h.5" />
+  </svg>
+)
+
+/* 操作人 / 用户痕迹 */
+export const FingerprintIcon = ({ size = 14, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <path d="M12 4a8 8 0 0 0-8 8v3" />
+    <path d="M20 15v-3a8 8 0 0 0-4-6.93" />
+    <path d="M12 11a1.5 1.5 0 0 0-1.5 1.5V17a3 3 0 0 0 3 3" />
+    <path d="M16 17v-4.5a4 4 0 0 0-2-3.46" />
+    <path d="M7 17.5V12a5 5 0 0 1 7.5-4.33" />
+  </svg>
+)
+

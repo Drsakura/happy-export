@@ -40,7 +40,7 @@
 
 1. **安装依赖并启动**
    ```bash
-   cd D:\wayne\Personal\trade-management-system
+   cd D:\wayne\Personal\happy-export
    
    # 安装后端依赖
    cd backend

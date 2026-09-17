@@ -1,21 +1,28 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import axios from 'axios'
 import {
   ActivityIcon,
   CalendarIcon,
   CheckIcon,
+  CleanupIcon,
   ClipboardIcon,
+  ClockIcon,
   CloseIcon,
-  DollarIcon,
   FactoryIcon,
+  FlagIcon,
+  InquiryIcon,
   PackageIcon,
   PinIcon,
   PlusCircleIcon,
+  QuoteIcon,
   SparkIcon,
   TrashIcon,
   UsersIcon
 } from '../components/Icons'
 import MonthYearWheel from '../components/MonthYearWheel'
+import { SkeletonPanel } from '../components/Skeleton'
+import { useAuth, hasPermission } from '../auth'
 
 const WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 const WEEKDAY_SHORT = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
@@ -699,7 +706,6 @@ function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
     <section className="calendar-board dashboard-panel">
       <div className="dashboard-panel-header calendar-board-header">
         <div>
-          <span className="section-label">[SCHEDULE]</span>
           <h2><CalendarIcon size={18} /> 工作日历</h2>
           <p className="calendar-hint">单击日期选中，再次单击添加日程 · 悬浮日程或节日查看详情</p>
         </div>
@@ -985,9 +991,47 @@ function CalendarBoard({ todos: seedTodos, onTodoCreated }) {
   )
 }
 
+const INQUIRY_STATUS_LABELS = {
+  draft: '草稿', quoting: '报价中', quoted: '已报价', won: '已成交', lost: '已流失', closed: '已关闭'
+}
+
+const CONTRACT_STATUS_LABELS = {
+  queued: '排队中', parsing: '解析中', pending_review: '待复核', reviewed: '已复核', parse_failed: '解析失败'
+}
+
+/** 今日/逾期跟进条目：客户名 + 跟进动作 + 日期，点进去就是客户详情 */
+function FollowUpRow({ record, overdue }) {
+  return (
+    <li className="followup-row">
+      <span className={`followup-dot${overdue ? ' is-overdue' : ''}`} />
+      <div className="followup-body">
+        <Link className="followup-customer" to={`/customers/${record.customer_id}`}>
+          {record.customer_name || `客户 #${record.customer_id}`}
+        </Link>
+        <span className="followup-action">
+          {record.next_action || `${record.activity_type || '跟进'}`}
+        </span>
+      </div>
+      <span className={`followup-date${overdue ? ' is-overdue' : ''}`}>
+        {String(record.next_action_date || '').slice(0, 10)}
+      </span>
+    </li>
+  )
+}
+
 function Dashboard() {
+  const { user } = useAuth()
   const [data, setData] = useState({ stats: {}, recentActivities: [], todos: [] })
   const [loading, setLoading] = useState(true)
+
+  /* 工作台是跨模块的汇总页，里面的入口必须跟侧栏用同一套口径 ——
+     没有那个模块的权限，入口就不出现在这里（否则侧栏藏了、工作台还漏一个）。 */
+  const canInquiry = hasPermission(user, 'inquiry.view')
+  const canQuote = hasPermission(user, 'quote.view')
+  const canCleanup = hasPermission(user, 'cleanup.view')
+  const canCustomer = hasPermission(user, 'customer.view')
+  const canEditInquiry = hasPermission(user, 'inquiry.edit')
+  const canEditCustomer = hasPermission(user, 'customer.edit')
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -1002,28 +1046,173 @@ function Dashboard() {
 
   useEffect(() => { loadDashboard() }, [loadDashboard])
 
-  if (loading) return <div className="loading">加载工作台数据…</div>
+  if (loading) {
+    return (
+      <div className="dashboard-container">
+        <div className="dashboard-welcome"><div><h1 className="page-title">工作台</h1><p>把今天的节奏、客户和订单放在同一个视野里。</p></div></div>
+        <div className="dashboard-content-grid">
+          <div className="dashboard-primary-column">
+            <section className="dashboard-panel"><SkeletonPanel lines={4} /></section>
+            <section className="dashboard-panel"><SkeletonPanel lines={3} /></section>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
-  const { stats, recentActivities, todos } = data
+  const {
+    stats, recentActivities, todos,
+    todayFollowUps = [], overdueFollowUps = [], recentInquiries = [],
+    recentQuotes = [], pendingContractJobs = []
+  } = data
   const completion = todos.length ? Math.max(12, Math.round((todos.filter(todo => todo.status === 'completed').length / todos.length) * 100)) : 0
+  const followUpCount = todayFollowUps.length + overdueFollowUps.length
 
   return (
     <div className="dashboard-container">
-      <div className="dashboard-welcome"><div><span className="section-label">[WORKSPACE / OVERVIEW]</span><h1 className="page-title">工作台</h1><p>把今天的节奏、客户和订单放在同一个视野里。</p></div></div>
+      <div className="dashboard-welcome"><div><h1 className="page-title">工作台</h1><p>把今天的节奏、客户和订单放在同一个视野里。</p></div></div>
 
       <CalendarBoard todos={todos} onTodoCreated={loadDashboard} />
 
+      {/* 跟进卡放日历下面一栏（Wayne 2026-09-15 要求）：先看日程，再看今天该催谁 */}
+      {followUpCount > 0 && canCustomer && (
+        <section className="followup-strip">
+          <div className="followup-card is-today">
+            <div className="followup-card-head">
+              <h3><ClockIcon size={15} /> 今日待跟进</h3>
+              <span className="followup-count">{todayFollowUps.length}</span>
+            </div>
+            {todayFollowUps.length === 0
+              ? <p className="followup-empty">今天没有安排跟进。</p>
+              : <ul className="followup-list">{todayFollowUps.map(record => <FollowUpRow key={record.id} record={record} />)}</ul>}
+          </div>
+          <div className="followup-card is-overdue">
+            <div className="followup-card-head">
+              <h3><FlagIcon size={15} /> 逾期未跟进</h3>
+              <span className="followup-count">{overdueFollowUps.length}</span>
+            </div>
+            {overdueFollowUps.length === 0
+              ? <p className="followup-empty">没有逾期项，节奏很好。</p>
+              : <ul className="followup-list">{overdueFollowUps.map(record => <FollowUpRow key={record.id} record={record} overdue />)}</ul>}
+          </div>
+        </section>
+      )}
+
       <div className="dashboard-content-grid">
         <div className="dashboard-primary-column">
-          <section className="dashboard-panel ai-digest-panel"><div className="dashboard-panel-header"><div><span className="section-label">[AI BRIEFING]</span><h2><SparkIcon size={16} /> 今日工作摘要</h2></div><span className="panel-live-status"><i />实时</span></div><div className="ai-digest-body"><strong>系统已准备好协助你处理今天的业务。</strong><p>当前共有 <b>{stats.pendingTodos || 0}</b> 项待办、<b>{stats.activeDeals || 0}</b> 个进行中商机和 <b>{stats.orders || 0}</b> 笔进行中订单。打开右上角的小皮，可以直接用自然语言查阅和操作系统。</p><div className="digest-tags"><span>供应链</span><span>客户跟进</span><span>订单节奏</span></div></div></section>
+          <section className="dashboard-panel ai-digest-panel"><div className="dashboard-panel-header"><div><h2><SparkIcon size={16} /> 今日工作摘要</h2></div><span className="panel-live-status"><i />实时</span></div><div className="ai-digest-body"><strong>系统已准备好协助你处理今天的业务。</strong><p>当前共有 <b>{stats.pendingTodos || 0}</b> 项待办、<b>{followUpCount}</b> 个待跟进客户、<b>{recentInquiries.length}</b> 条最近询盘、<b>{stats.pendingContractJobs || 0}</b> 个待复核合同任务。打开右上角的小皮，可以直接用自然语言查阅和操作系统。</p><div className="digest-tags"><span>供应链</span><span>客户跟进</span><span>询盘报价</span><span>订单节奏</span></div></div></section>
 
-          <section className="dashboard-panel"><div className="dashboard-panel-header"><div><span className="section-label">[ACTIVITY LOG]</span><h2><ActivityIcon size={17} /> 最近活动</h2></div><button className="panel-link">查看日志</button></div>{recentActivities.length === 0 ? <div className="dashboard-empty">暂无最近活动</div> : <ul className="activity-list">{recentActivities.map(activity => <li key={activity.id} className="activity-item"><span className="activity-time">{new Date(activity.created_at).toLocaleString('zh-CN')}</span><div className="activity-content"><strong>{activity.subject}</strong><span>{activity.content}</span></div></li>)}</ul>}</section>
+          <section className="dashboard-panel">
+            <div className="dashboard-panel-header">
+              <div><h2><InquiryIcon size={17} /> 最近询盘</h2></div>
+              {canInquiry && <Link className="panel-link" to="/inquiries">全部询盘</Link>}
+            </div>
+            {recentInquiries.length === 0
+              ? <div className="dashboard-empty">还没有询盘记录</div>
+              : (
+                <ul className="compact-list">
+                  {recentInquiries.map(inquiry => (
+                    <li key={inquiry.id}>
+                      {canInquiry ? (
+                        <Link className="compact-main" to={`/inquiries/${inquiry.id}`}>
+                          <span className="compact-title">{inquiry.title || '未命名询盘'}</span>
+                          <span className="compact-sub">
+                            <code>{inquiry.inquiry_no}</code>
+                            {' · '}
+                            {inquiry.customer_name || '未知客户'}
+                            {' · '}
+                            {inquiry.inquiry_date}
+                          </span>
+                        </Link>
+                      ) : (
+                        <span className="compact-main">
+                          <span className="compact-title">{inquiry.title || '未命名询盘'}</span>
+                          <span className="compact-sub">
+                            <code>{inquiry.inquiry_no}</code>
+                            {' · '}
+                            {inquiry.customer_name || '未知客户'}
+                            {' · '}
+                            {inquiry.inquiry_date}
+                          </span>
+                        </span>
+                      )}
+                      <span className="compact-tag">{INQUIRY_STATUS_LABELS[inquiry.status] || inquiry.status}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+          </section>
+
+          <section className="dashboard-panel">
+            <div className="dashboard-panel-header">
+              <div><h2><QuoteIcon size={17} /> 最近报价单</h2></div>
+              {canQuote && <Link className="panel-link" to="/quotes">报价单管理</Link>}
+            </div>
+            {recentQuotes.length === 0
+              ? <div className="dashboard-empty">还没有客户报价单</div>
+              : (
+                <ul className="compact-list">
+                  {recentQuotes.map(quote => (
+                    <li key={quote.id}>
+                      <span className="compact-main">
+                        <span className="compact-title"><code>{quote.quote_no}</code></span>
+                        <span className="compact-sub">
+                          {quote.customer_name || '未知客户'}
+                          {' · '}
+                          {quote.quote_date}
+                          {quote.valid_until ? ` · 有效期至 ${quote.valid_until}` : ''}
+                        </span>
+                      </span>
+                      <span className="compact-tag">{quote.currency || ''}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+          </section>
+
+          <section className="dashboard-panel">
+            <div className="dashboard-panel-header">
+              <div><h2><ActivityIcon size={17} /> 最近活动</h2></div><button className="panel-link">查看日志</button></div>{recentActivities.length === 0 ? <div className="dashboard-empty">暂无最近活动</div> : <ul className="activity-list">{recentActivities.map(activity => <li key={activity.id} className="activity-item"><span className="activity-time">{new Date(activity.created_at).toLocaleString('zh-CN')}</span><div className="activity-content"><strong>{activity.subject}</strong><span>{activity.content}</span></div></li>)}</ul>}</section>
         </div>
 
         <aside className="dashboard-secondary-column">
-          <section className="dashboard-panel stat-rail"><div className="dashboard-panel-header"><div><span className="section-label">[SYSTEM PULSE]</span><h2>业务概览</h2></div><span className="panel-period">本月</span></div><StatLine icon={<FactoryIcon size={17} />} label="供应商" value={stats.suppliers || 0} /><StatLine icon={<PackageIcon size={17} />} label="产品 SKU" value={stats.products || 0} /><StatLine icon={<UsersIcon size={17} />} label="客户" value={stats.customers || 0} /><StatLine icon={<ClipboardIcon size={17} />} label="进行中订单" value={stats.orders || 0} /><StatLine icon={<DollarIcon size={17} />} label="进行中商机" value={stats.activeDeals || 0} /></section>
-          <section className="dashboard-panel completion-panel"><div className="dashboard-panel-header"><div><span className="section-label">[TASK HEALTH]</span><h2>任务完成情况</h2></div><span className="panel-period">当前</span></div><div className="completion-ring" style={{ '--progress': `${completion}%` }}><div><strong>{completion}%</strong><span>完成率</span></div></div><div className="completion-legend"><span><i className="dot done" />已完成</span><span><i className="dot pending" />待处理</span></div></section>
-          <section className="dashboard-panel quick-panel"><div className="dashboard-panel-header"><div><span className="section-label">[QUICK ACCESS]</span><h2>快捷入口</h2></div></div><button><UsersIcon size={16} /> 新增客户</button><button><PackageIcon size={16} /> 添加产品</button><button><ClipboardIcon size={16} /> 新建订单</button></section>
+          <section className="dashboard-panel stat-rail"><div className="dashboard-panel-header"><div><h2>业务概览</h2></div><span className="panel-period">本月</span></div><StatLine icon={<FactoryIcon size={17} />} label="供应商" value={stats.suppliers || 0} /><StatLine icon={<PackageIcon size={17} />} label="产品 SKU" value={stats.products || 0} /><StatLine icon={<UsersIcon size={17} />} label="客户" value={stats.customers || 0} /><StatLine icon={<ClipboardIcon size={17} />} label="进行中订单" value={stats.orders || 0} /><StatLine icon={<InquiryIcon size={17} />} label="待跟进" value={followUpCount} /><StatLine icon={<CleanupIcon size={17} />} label="待复核合同" value={stats.pendingContractJobs || 0} /></section>
+
+          <section className="dashboard-panel">
+            <div className="dashboard-panel-header">
+              <div><h2><CleanupIcon size={17} /> 待审核合同</h2></div>
+              {canCleanup && <Link className="panel-link" to="/contract-cleanup">去复核</Link>}
+            </div>
+            {pendingContractJobs.length === 0
+              ? <div className="dashboard-empty">没有待复核的导入任务</div>
+              : (
+                <ul className="compact-list">
+                  {pendingContractJobs.map(job => (
+                    <li key={job.id}>
+                      {canCleanup ? (
+                        <Link className="compact-main" to="/contract-cleanup">
+                          <span className="compact-title"><code>{job.job_no}</code></span>
+                          <span className="compact-sub">
+                            {job.file_count} 个文件 · {new Date(job.created_at).toLocaleString('zh-CN')}
+                          </span>
+                        </Link>
+                      ) : (
+                        <span className="compact-main">
+                          <span className="compact-title"><code>{job.job_no}</code></span>
+                          <span className="compact-sub">
+                            {job.file_count} 个文件 · {new Date(job.created_at).toLocaleString('zh-CN')}
+                          </span>
+                        </span>
+                      )}
+                      <span className="compact-tag">{CONTRACT_STATUS_LABELS[job.status] || job.status}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+          </section>
+
+          <section className="dashboard-panel completion-panel"><div className="dashboard-panel-header"><div><h2>任务完成情况</h2></div><span className="panel-period">当前</span></div><div className="completion-ring" style={{ '--progress': `${completion}%` }}><div><strong>{completion}%</strong><span>完成率</span></div></div><div className="completion-legend"><span><i className="dot done" />已完成</span><span><i className="dot pending" />待处理</span></div></section>
+          <section className="dashboard-panel quick-panel"><div className="dashboard-panel-header"><div><h2>快捷入口</h2></div></div>{canEditInquiry && <Link to="/inquiries"><InquiryIcon size={16} /> 新建询盘</Link>}{canEditCustomer && <Link to="/customers"><UsersIcon size={16} /> 新增客户</Link>}{canCleanup && <Link to="/contract-cleanup"><CleanupIcon size={16} /> 导入合同</Link>}</section>
         </aside>
       </div>
     </div>

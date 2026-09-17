@@ -1,12 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import axios from 'axios'
+import { useNavigate } from 'react-router-dom'
+import { SkeletonTableRows } from '../components/Skeleton'
+import { useAuth, hasPermission } from '../auth'
 
 /**
  * 客户报价单管理
- * 数据来源：happy 后端 /api/quotes（P1 后端合并阶段开放）
- * 未接入前保持可用的空态，不做假数据。
+ * 数据来源：happy 后端 /api/quotes
  */
 function QuoteManagement() {
+  const navigate = useNavigate()
+  const { user } = useAuth()
+  const canEdit = hasPermission(user, 'quote.edit')
   const [quotes, setQuotes] = useState([])
   const [loading, setLoading] = useState(true)
   const [keyword, setKeyword] = useState('')
@@ -32,7 +37,7 @@ function QuoteManagement() {
     <div className="page-container">
       <div className="page-header">
         <h1 className="page-title">客户报价单管理</h1>
-        <button className="btn btn-primary">+ 新建报价单</button>
+        {canEdit && <button className="btn btn-primary" onClick={() => navigate('/quotes/new')}>+ 新建报价单</button>}
       </div>
 
       <div className="toolbar">
@@ -63,12 +68,12 @@ function QuoteManagement() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan="7" className="empty-state">加载中...</td></tr>
+              <SkeletonTableRows rows={5} widths={[1.2, 1.6, 1, 1, 1.2, 0.8, 1]} />
             ) : rows.length === 0 ? (
               <tr>
                 <td colSpan="7" className="empty-state">
                   <div className="empty-state-title">暂无报价单</div>
-                  <div className="empty-state-hint">报价单接口待接入（P1 后端合并阶段开放）</div>
+                  <div className="empty-state-hint">在「产品管理」里把货号加入小推车，点「汇总报价」就能生成第一张。</div>
                 </td>
               </tr>
             ) : (
@@ -82,7 +87,7 @@ function QuoteManagement() {
                   <td><span className={`status-badge status-${q.status}`}>{statusText(q.status)}</span></td>
                   <td>
                     <button className="btn-link">查看</button>
-                    <button className="btn-link">转 PI</button>
+                    {canEdit && <button className="btn-link">转 PI</button>}
                   </td>
                 </tr>
               ))

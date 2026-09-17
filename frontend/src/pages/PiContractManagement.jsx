@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import axios from 'axios'
+import { SkeletonTableRows } from '../components/Skeleton'
+import { useAuth, hasPermission } from '../auth'
 
 /**
  * PI 合同管理（Proforma Invoice）
  * 数据来源：happy 后端 /api/pi-contracts（P1 后端合并阶段开放）
  */
 function PiContractManagement() {
+  const { user } = useAuth()
+  const canEdit = hasPermission(user, 'contract.edit')
   const [contracts, setContracts] = useState([])
   const [loading, setLoading] = useState(true)
   const [keyword, setKeyword] = useState('')
@@ -31,7 +35,7 @@ function PiContractManagement() {
     <div className="page-container">
       <div className="page-header">
         <h1 className="page-title">PI 合同管理</h1>
-        <button className="btn btn-primary">+ 新建 PI</button>
+        {canEdit && <button className="btn btn-primary">+ 新建 PI</button>}
       </div>
 
       <div className="toolbar">
@@ -62,7 +66,7 @@ function PiContractManagement() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan="7" className="empty-state">加载中...</td></tr>
+              <SkeletonTableRows rows={5} widths={[1.2, 1.6, 1, 1, 1.2, 0.8, 1]} />
             ) : rows.length === 0 ? (
               <tr>
                 <td colSpan="7" className="empty-state">
@@ -81,7 +85,7 @@ function PiContractManagement() {
                   <td><span className={`status-badge status-${c.status}`}>{statusText(c.status)}</span></td>
                   <td>
                     <button className="btn-link">查看</button>
-                    <button className="btn-link">生成单据</button>
+                    {canEdit && <button className="btn-link">生成单据</button>}
                   </td>
                 </tr>
               ))

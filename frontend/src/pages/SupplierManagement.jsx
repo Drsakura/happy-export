@@ -1,14 +1,18 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import { useAuth, hasPermission } from '../auth'
 import { GridIcon, ListIcon } from '../components/Icons'
+import { SkeletonCards, SkeletonPanel } from '../components/Skeleton'
+import { SearchField } from '../components/SearchSelect'
+import { SkuThumb } from '../components/SkuThumb'
 
 /**
  * 供应商管理（原生 React 版）
  *
  * 由 SKU Manager 的「供应商管理」视图迁移而来，功能对齐：
  * 卡片列表 · 未分类入口 · 新建/编辑 · 删除 · 详情（联系方式 / 供货清单 / 合同记录）。
- * 数据经 /api/sku/* 同源代理访问，禁止硬编码 SKU 的独立端口。
+ * 数据走 /api/sku/* 同源接口（SKU 模块已并入后端），禁止硬编码独立端口。
  */
 
 const API = '/api/sku'
@@ -106,6 +110,8 @@ function Kv({ label, value, mono }) {
 
 function SupplierManagement() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const canEdit = hasPermission(user, 'supplier.edit')
 
   const [mode, setMode] = useState('list') // list | detail | form
   const [suppliers, setSuppliers] = useState([])
@@ -125,6 +131,8 @@ function SupplierManagement() {
 
   const [detail, setDetail] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  // 详情页「供货清单」的即时过滤（一家供应商可能供几十上百个货号）
+  const [productQuery, setProductQuery] = useState('')
 
   const [form, setForm] = useState(EMPTY_FORM)
   const [editingId, setEditingId] = useState(null)
@@ -165,6 +173,7 @@ function SupplierManagement() {
     setDetailLoading(true)
     setDetail(null)
     setNotice('')
+    setProductQuery('')
     try {
       const { data } = await axios.get(`${API}/suppliers/${id}`)
       setDetail(data)
@@ -246,7 +255,7 @@ function SupplierManagement() {
             <h1 className="page-title">供应商管理</h1>
             <p className="page-sub">档案、联系方式、工厂所在地与主营类目</p>
           </div>
-          <button className="btn btn-primary" onClick={startCreate}>+ 新建供应商</button>
+          {canEdit && <button className="btn btn-primary" onClick={startCreate}>+ 新建供应商</button>}
         </div>
 
         {notice && <div className="notice-inline">{notice}</div>}
@@ -285,7 +294,7 @@ function SupplierManagement() {
         </div>
 
         {loading ? (
-          <div className="loading">加载中…</div>
+          <SkeletonCards count={8} />
         ) : suppliers.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">🏭</div>
@@ -385,6 +394,11 @@ function SupplierManagement() {
     const s = detail?.supplier
     const products = detail?.products || []
     const contracts = detail?.contracts || []
+    const pk = productQuery.trim().toLowerCase()
+    const visibleProducts = pk
+      ? products.filter((p) => [p.display_sku, p.sku, p.group_name, p.name, p.spec]
+        .filter(Boolean).join(' ').toLowerCase().includes(pk))
+      : products
 
     return (
       <div className="page-container">
@@ -401,14 +415,16 @@ function SupplierManagement() {
           </div>
           <div className="header-actions">
             <button className="btn" onClick={() => { setDetail(null); setMode('list') }}>← 供应商列表</button>
-            {s && <button className="btn btn-primary" onClick={() => startEdit(s)}>编辑档案</button>}
+            {s && canEdit && <button className="btn btn-primary" onClick={() => startEdit(s)}>编辑档案</button>}
           </div>
         </div>
 
         {notice && <div className="notice-inline">{notice}</div>}
 
         {detailLoading || !s ? (
-          <div className="loading">加载中…</div>
+          <div className="card">
+            <SkeletonPanel lines={4} />
+          </div>
         ) : (
           <>
             <div className="card">
@@ -431,12 +447,26 @@ function SupplierManagement() {
             <div className="card">
               <div className="card-header">
                 <h2>供货清单</h2>
-                <span className="secondary">{products.length} 条</span>
+                <span className="secondary">
+                  {productQuery.trim() ? `${visibleProducts.length} / ${products.length} 条` : `${products.length} 条`}
+                </span>
               </div>
-              {products.length === 0 ? (
+              {products.length > 1 && (
+                <div className="panel-search-row">
+                  <SearchField
+                    size="sm"
+                    value={productQuery}
+                    onChange={setProductQuery}
+                    placeholder="搜货号 / 所属产品 / 规格…"
+                  />
+                </div>
+              )}
+              {visibleProducts.length === 0 ? (
                 <div className="empty-state" style={{ padding: '28px 12px' }}>
                   <div className="empty-state-hint">
-                    还没有归到这家供应商的货号。导入合同时在「合同导入」页选上这家供应商即可。
+                    {products.length === 0
+                      ? '还没有归到这家供应商的货号。导入合同时在「合同导入」页选上这家供应商即可。'
+                      : '没有匹配的货号，换个关键词试试。'}
                   </div>
                 </div>
               ) : (
@@ -453,12 +483,10 @@ function SupplierManagement() {
                       </tr>
                     </thead>
                     <tbody>
-                      {products.map((p) => (
+                      {visibleProducts.map((p) => (
                         <tr key={`${p.sku}-${p.group_id ?? ''}`}>
                           <td>
-                            {p.thumb
-                              ? <img className="thumb" src={`/product-images/${p.thumb}`} alt="" loading="lazy" />
-                              : <span className="thumb thumb-empty" />}
+                            <SkuThumb sku={p.sku} filename={p.thumb} size={34} />
                           </td>
                           <td className="mono">{p.display_sku || p.sku}</td>
                           <td>{p.group_name || p.name || '—'}</td>
@@ -578,10 +606,12 @@ function SupplierManagement() {
         </div>
 
         <div className="form-actions">
-          <button className="btn btn-primary" onClick={save} disabled={saving}>
-            {saving ? '保存中…' : '保存'}
-          </button>
-          {editingId && (
+          {canEdit && (
+            <button className="btn btn-primary" onClick={save} disabled={saving}>
+              {saving ? '保存中…' : '保存'}
+            </button>
+          )}
+          {editingId && canEdit && (
             <button
               className="btn btn-danger"
               onClick={() => removeSupplier(editingId, editingName)}
